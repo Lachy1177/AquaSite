@@ -1,8 +1,8 @@
 # Virtual environment
 venv/
 
-# Database
-db.sqlite3
+# Database **to ignore at a later date**
+# db.sqlite3
 
 # Python cache
 __pycache__/
