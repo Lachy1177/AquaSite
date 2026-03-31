@@ -1,1 +1,16 @@
+# Virtual environment
 venv/
+
+# Database
+db.sqlite3
+
+# Python cache
+__pycache__/
+*.pyc
+*.pyo
+
+# Environment variables (keep secrets safe)
+.env
+
+# VS Code
+.vscode/
