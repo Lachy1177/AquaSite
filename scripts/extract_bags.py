@@ -271,6 +271,14 @@ def main():
         # Finalise video clip
         if video_writer:
             video_writer.release()
+            # Re-encode with h264 to reduce file size (mp4v produces very large files)
+            h264_path = clip_path.replace(".mp4", "_h264.mp4")
+            subprocess.run(
+                ["ffmpeg", "-y", "-i", clip_path, "-c:v", "libx264", "-crf", "28", "-preset", "fast", h264_path],
+                check=True, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
+            )
+            os.remove(clip_path)
+            clip_path = h264_path
             clip_paths.append(clip_path)
             print(f"  video  : {frame_count} frames → {os.path.basename(clip_path)}")
         else:
