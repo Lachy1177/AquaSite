@@ -69,9 +69,9 @@ SENSOR_TOPICS = [
 
 # ── Helpers ────────────────────────────────────────────────────────────────────
 
-def ros_time_to_iso(t):
-    """Convert a rospy.Time to a UTC ISO-8601 string."""
-    return datetime.fromtimestamp(t.to_sec(), tz=timezone.utc).isoformat()
+def ros_time_to_iso(t_ns):
+    """Convert a rosbags nanosecond timestamp to a UTC ISO-8601 string."""
+    return datetime.fromtimestamp(t_ns / 1e9, tz=timezone.utc).isoformat()
 
 
 def bag_sort_key(path):
@@ -111,9 +111,10 @@ def main():
         sys.exit(1)
 
     try:
-        import rosbag
+        from rosbags.rosbag1 import Reader
+        from rosbags.typesys import Stores, get_typestore
     except ImportError:
-        print("ERROR: rosbag not found. Run this script inside a ROS environment.")
+        print("ERROR: rosbags not found. Run: pip install rosbags")
         sys.exit(1)
 
     from supabase import create_client
@@ -126,9 +127,27 @@ def main():
         sys.exit(1)
     print(f"Found {len(bags)} bag files in {BAG_DIR}\n")
 
+    # Build typestore once; register custom message types from the first bag
+    typestore = get_typestore(Stores.ROS1_NOETIC)
+    _registered_types = set()
+
+    def register_bag_types(reader):
+        try:
+            from rosbags.typesys import get_types_from_msg
+            add_types = {}
+            for conn in reader.connections:
+                if conn.msgtype not in _registered_types:
+                    add_types.update(get_types_from_msg(conn.msgdef, conn.msgtype))
+                    _registered_types.add(conn.msgtype)
+            if add_types:
+                typestore.register(add_types)
+        except Exception:
+            pass  # standard types will still work
+
     # Detect dive start time from first bag
-    with rosbag.Bag(bags[0]) as b:
-        dive_start = datetime.fromtimestamp(b.get_start_time(), tz=timezone.utc)
+    with Reader(bags[0]) as b:
+        register_bag_types(b)
+        dive_start = datetime.fromtimestamp(b.start_time / 1e9, tz=timezone.utc)
 
     # Create the dive record
     result = supabase.table("dives").insert({
@@ -162,16 +181,21 @@ def main():
         video_writer = None
         frame_count = 0
 
-        read_topics = [TOPIC_CAMERA] + SENSOR_TOPICS + [TOPIC_GPS]
+        read_topics = set([TOPIC_CAMERA] + SENSOR_TOPICS + [TOPIC_GPS])
 
-        with rosbag.Bag(bag_path) as bag:
-            for topic, msg, t in bag.read_messages(topics=read_topics):
-                dt_str = ros_time_to_iso(t)
-                ros_time = t.to_sec()
+        with Reader(bag_path) as bag:
+            register_bag_types(bag)
+            connections = [c for c in bag.connections if c.topic in read_topics]
+            for connection, timestamp, rawdata in bag.messages(connections=connections):
+                topic = connection.topic
+                msg = typestore.deserialize_ros1(rawdata, connection.msgtype)
+                dt_str = ros_time_to_iso(timestamp)
+                ros_time = timestamp / 1e9
 
                 # ── Camera frames ──────────────────────────────────────────
                 if topic == TOPIC_CAMERA:
-                    arr = np.frombuffer(bytes(msg.data), dtype=np.uint8)
+                    raw = msg.data
+                    arr = np.frombuffer(bytes(raw) if not isinstance(raw, (bytes, bytearray)) else raw, dtype=np.uint8)
                     frame = cv2.imdecode(arr, cv2.IMREAD_COLOR)
                     if frame is None:
                         continue

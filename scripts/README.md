@@ -83,8 +83,10 @@ CREATE TABLE dive_videos (
 With your virtual environment active:
 
 ```powershell
-pip install supabase==2.15.2 opencv-python==4.11.0.86
+pip install -r requirements.txt
 ```
+
+This includes `rosbags`, which is a pure-Python ROS bag reader that works on Windows, Linux, and macOS without requiring a ROS installation.
 
 ### 3 — Install ffmpeg
 
@@ -98,9 +100,9 @@ Verify it works:
 ffmpeg -version
 ```
 
-### 4 — ROS environment
+### 4 — No ROS environment needed
 
-The script uses `rosbag` which is part of ROS. Run the script inside a ROS environment where `import rosbag` works.
+The script uses `rosbags` (pure Python) instead of `rosbag` (ROS). It runs directly on Windows, Linux, or macOS — no ROS installation required.
 
 ---
 
