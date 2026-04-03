@@ -15,5 +15,8 @@ __pycache__/
 # VS Code
 .vscode/
 
+#any media uploaded. We dont want data files on public github at req of industry contact
+media/
+
 # Claude 
 claude.md
