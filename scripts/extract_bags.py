@@ -274,7 +274,7 @@ def main():
             # Re-encode with h264 to reduce file size (mp4v produces very large files)
             h264_path = clip_path.replace(".mp4", "_h264.mp4")
             subprocess.run(
-                ["ffmpeg", "-y", "-i", clip_path, "-c:v", "libx264", "-crf", "28", "-preset", "fast", h264_path],
+                ["ffmpeg", "-y", "-i", clip_path, "-c:v", "libx264", "-crf", "35", "-preset", "fast", h264_path],
                 check=True, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
             )
             os.remove(clip_path)
