@@ -36,6 +36,7 @@ ALLOWED_HOSTS = []
 # Application definition
 
 INSTALLED_APPS = [
+    'django.contrib.admin',
     'django.contrib.auth',
     'django.contrib.contenttypes',
     'django.contrib.sessions',
@@ -78,16 +79,32 @@ WSGI_APPLICATION = 'AquaSightWeb.wsgi.application'
 # Database
 # https://docs.djangoproject.com/en/3.2/ref/settings/#databases
 
-DATABASES = {
-    'default': {
-        'ENGINE': 'django.db.backends.postgresql',
-        'NAME': config('DB_NAME', default='postgres'),
-        'USER': config('DB_USER', default='postgres'),
-        'PASSWORD': config('DB_PASSWORD'),
-        'HOST': config('DB_HOST'),
-        'PORT': config('DB_PORT', default='5432'),
+# --- DATABASE SETUP ---
+# If DB_HOST is present (local dev / production), use Supabase Postgres.
+# If missing (GitHub Actions CI), use local SQLite.
+if config('DB_HOST', default=''):
+    DATABASES = {
+        'default': {
+            'ENGINE': 'django.db.backends.postgresql',
+            'NAME': config('DB_NAME'),
+            'USER': config('DB_USER'),
+            'PASSWORD': config('DB_PASSWORD', default=''), # Your .env has this blank, so we need a default here
+            'HOST': config('DB_HOST'),
+            'PORT': config('DB_PORT', default='5432'),
+        }
     }
-}
+else:
+    DATABASES = {
+        'default': {
+            'ENGINE': 'django.db.backends.sqlite3',
+            'NAME': BASE_DIR / 'db.sqlite3', # Creates a temp file just for testing
+        }
+    }
+
+# --- SUPABASE CONFIG ---
+# Fallbacks provided so GitHub Actions doesn't crash when running tests
+SUPABASE_URL = config('SUPABASE_URL', default='https://dummy.supabase.co')
+SUPABASE_KEY = config('SUPABASE_KEY', default='dummy-key')
 
 
 # Password validation
