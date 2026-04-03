@@ -17,3 +17,6 @@ __pycache__/
 
 #any media uploaded. We dont want data files on public github at req of industry contact
 media/
+
+# Claude 
+claude.md
