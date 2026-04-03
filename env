@@ -1,0 +1,12 @@
+SECRET_KEY=django-insecure-6)(c75xidr3l@g+tu#zi(klzrj+^b-9p474o!r$g&23kk-$dod
+
+DB_NAME=postgres
+DB_USER=postgres
+DB_PASSWORD=wWtUlPmn3G77wc2f
+DB_HOST=db.nmnpkuwdtfqtwrajniph.supabase.co
+DB_PORT=5432
+
+# For storing the dive info (Supabase)
+SUPABASE_URL=https://nmnpkuwdtfqtwrajniph.supabase.co
+SUPABASE_KEY=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im5tbnBrdXdkdGZxdHdyYWpuaXBoIiwicm9sZSI6InNlcnZpY2Vfcm9sZSIsImlhdCI6MTc3NTA0MzEyNSwiZXhwIjoyMDkwNjE5MTI1fQ.07ODU-0pyAcAwlhLlTV7RRojNn1xiJ0FKMddF7zh-L8
+SUPABASE_STORAGE_BUCKET=dive-videos
