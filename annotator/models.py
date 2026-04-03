@@ -1,0 +1,118 @@
+from django.db import models
+from django.contrib.auth.models import User
+import uuid
+
+
+class TaxonomyLabel(models.Model):
+    """Controlled vocabulary for classification."""
+    CATEGORY_CHOICES = [
+        ("fish", "Fish"),
+        ("coral", "Coral"),
+        ("invertebrate", "Invertebrate"),
+        ("algae", "Algae"),
+        ("other", "Other"),
+    ]
+    name = models.CharField(max_length=128, unique=True)
+    category = models.CharField(max_length=32, choices=CATEGORY_CHOICES, default="other")
+    description = models.TextField(blank=True)
+
+    def __str__(self):
+        return f"{self.category} / {self.name}"
+
+    class Meta:
+        ordering = ["category", "name"]
+
+
+class AnalysisImage(models.Model):
+    """An image submitted for analysis."""
+    STATUS_CHOICES = [
+        ("bound", "Bounding"),
+        ("classify", "Classifying"),
+        ("specify", "Specifying"),
+        ("complete", "Complete"),
+    ]
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    image = models.ImageField(upload_to="analysis_images/")
+    original_filename = models.CharField(max_length=255, blank=True)
+    uploaded_by = models.ForeignKey(User, on_delete=models.SET_NULL, null=True, related_name="uploaded_images")
+    uploaded_at = models.DateTimeField(auto_now_add=True)
+    status = models.CharField(max_length=16, choices=STATUS_CHOICES, default="bound")
+    notes = models.TextField(blank=True)
+
+    def __str__(self):
+        return f"{self.original_filename} [{self.status}]"
+
+    class Meta:
+        ordering = ["-uploaded_at"]
+
+
+class BoundingBox(models.Model):
+    """A single bounding box on an AnalysisImage."""
+    SOURCE_CHOICES = [
+        ("dino", "DINOv3 (auto)"),
+        ("manual", "Manual"),
+        ("corrected", "Corrected"),
+    ]
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    image = models.ForeignKey(AnalysisImage, on_delete=models.CASCADE, related_name="boxes")
+    # Coordinates as percentages (0–100) of image width/height for resolution independence
+    x = models.FloatField(help_text="Left edge as % of image width")
+    y = models.FloatField(help_text="Top edge as % of image height")
+    width = models.FloatField(help_text="Width as % of image width")
+    height = models.FloatField(help_text="Height as % of image height")
+    source = models.CharField(max_length=16, choices=SOURCE_CHOICES, default="dino")
+    confidence = models.FloatField(null=True, blank=True, help_text="Model confidence 0–1")
+    is_deleted = models.BooleanField(default=False, help_text="Soft-delete during bounding phase")
+    created_by = models.ForeignKey(User, on_delete=models.SET_NULL, null=True, related_name="created_boxes")
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    # Classification phase
+    taxonomy_label = models.ForeignKey(
+        TaxonomyLabel, on_delete=models.SET_NULL,
+        null=True, blank=True, related_name="boxes"
+    )
+    ai_suggested_label = models.CharField(max_length=128, blank=True)
+    ai_suggestion_confidence = models.FloatField(null=True, blank=True)
+    classified_by = models.ForeignKey(
+        User, on_delete=models.SET_NULL,
+        null=True, blank=True, related_name="classified_boxes"
+    )
+    classified_at = models.DateTimeField(null=True, blank=True)
+
+    # Specification phase (researcher identification)
+    species_name = models.CharField(max_length=255, blank=True)
+    researcher_notes = models.TextField(blank=True)
+    specified_by = models.ForeignKey(
+        User, on_delete=models.SET_NULL,
+        null=True, blank=True, related_name="specified_boxes"
+    )
+    specified_at = models.DateTimeField(null=True, blank=True)
+    is_finalized = models.BooleanField(default=False)
+
+    def __str__(self):
+        label = self.taxonomy_label.name if self.taxonomy_label else "unlabelled"
+        return f"Box {self.id} on {self.image} [{label}]"
+
+    def to_dict(self):
+        """Serialise to JSON-safe dict for frontend use."""
+        return {
+            "id": str(self.id),
+            "x": self.x,
+            "y": self.y,
+            "width": self.width,
+            "height": self.height,
+            "source": self.source,
+            "confidence": self.confidence,
+            "is_deleted": self.is_deleted,
+            "taxonomy_label": self.taxonomy_label.name if self.taxonomy_label else None,
+            "taxonomy_category": self.taxonomy_label.category if self.taxonomy_label else None,
+            "ai_suggested_label": self.ai_suggested_label,
+            "ai_suggestion_confidence": self.ai_suggestion_confidence,
+            "species_name": self.species_name,
+            "researcher_notes": self.researcher_notes,
+            "is_finalized": self.is_finalized,
+        }
+
+    class Meta:
+        ordering = ["created_at"]

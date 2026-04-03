@@ -1,0 +1,144 @@
+{% load static %}
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>AS · Marine Image Analysis</title>
+<link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@300;400;500&family=Syne:wght@400;700;800&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --bg: #1e1e1e; --bg-mid: #252525; --bg-panel: #2a2a2a;
+    --border: #3a3a3a; --text: #d4d4d4; --text-muted: #7a7a7a;
+    --accent: #4a9eff; --accent-dim: #1d4e8f;
+    --green: #4ecb71; --mono: 'JetBrains Mono',monospace; --sans: 'Syne',sans-serif;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { background: var(--bg); color: var(--text); font-family: var(--mono); font-size: 13px; min-height: 100vh; }
+
+  .header {
+    border-bottom: 1px solid var(--border);
+    padding: 14px 32px;
+    display: flex; align-items: center; gap: 16px;
+    background: var(--bg-mid);
+  }
+  .logo { font-family: var(--sans); font-size: 22px; font-weight: 800; }
+  .logo .a { color: var(--accent); }
+  .subtitle { color: var(--text-muted); font-size: 11px; flex: 1; }
+
+  .upload-area {
+    margin: 32px auto;
+    max-width: 560px;
+    border: 2px dashed var(--border);
+    border-radius: 6px;
+    padding: 40px;
+    text-align: center;
+    cursor: pointer;
+    transition: border-color 0.2s;
+  }
+  .upload-area:hover { border-color: var(--accent); }
+  .upload-area input { display: none; }
+  .upload-title { font-family: var(--sans); font-size: 16px; font-weight: 700; margin-bottom: 8px; }
+  .upload-sub { color: var(--text-muted); font-size: 11px; }
+  .upload-btn {
+    margin-top: 16px;
+    display: inline-block;
+    padding: 8px 24px;
+    background: var(--accent);
+    color: #000;
+    border-radius: 3px;
+    font-family: var(--sans);
+    font-weight: 700;
+    font-size: 13px;
+    cursor: pointer;
+  }
+
+  .image-grid {
+    max-width: 1200px;
+    margin: 0 auto;
+    padding: 0 32px 40px;
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(240px, 1fr));
+    gap: 16px;
+  }
+  .image-card {
+    background: var(--bg-panel);
+    border: 1px solid var(--border);
+    border-radius: 4px;
+    overflow: hidden;
+    cursor: pointer;
+    transition: border-color 0.15s;
+    text-decoration: none;
+    color: inherit;
+    display: block;
+  }
+  .image-card:hover { border-color: var(--accent); }
+  .image-card img { width: 100%; height: 140px; object-fit: cover; display: block; }
+  .image-card-body { padding: 10px 12px; }
+  .image-card-name { font-size: 11px; margin-bottom: 4px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .image-card-meta { font-size: 9px; color: var(--text-muted); display: flex; justify-content: space-between; }
+  .status-chip {
+    font-size: 9px; padding: 1px 6px; border-radius: 2px;
+    text-transform: uppercase; letter-spacing: 0.5px;
+  }
+  .status-bound     { background: #1a3550; color: var(--accent); }
+  .status-classify  { background: #2a1f00; color: #f5a623; }
+  .status-specify   { background: #1a2e1a; color: var(--green); }
+  .status-complete  { background: #1a2a1a; color: var(--green); }
+  .section-title {
+    max-width: 1200px; margin: 0 auto;
+    padding: 24px 32px 12px;
+    font-family: var(--sans);
+    font-size: 13px; font-weight: 700;
+    color: var(--text-muted);
+    text-transform: uppercase; letter-spacing: 1px;
+    border-bottom: 1px solid var(--border);
+    margin-bottom: 16px;
+  }
+</style>
+</head>
+<body>
+
+<div class="header">
+  <div class="logo"><span class="a">A</span><span class="s">S</span></div>
+  <div class="subtitle">Marine Image Annotator — Aquatic Sciences</div>
+</div>
+
+<div class="upload-area" onclick="document.getElementById('file-input').click()">
+  <input type="file" id="file-input" accept="image/*" onchange="uploadFile(this)">
+  <div class="upload-title">Upload Image for Analysis</div>
+  <div class="upload-sub">PNG, JPG, TIFF · Underwater / marine imagery</div>
+  <div class="upload-btn">Choose File</div>
+</div>
+
+{% if images %}
+<div class="section-title">Recent Images ({{ images.count }})</div>
+<div class="image-grid">
+  {% for img in images %}
+  <a class="image-card" href="{% url 'annotator:workspace' img.id img.status %}">
+    <img src="{{ img.image.url }}" alt="{{ img.original_filename }}">
+    <div class="image-card-body">
+      <div class="image-card-name">{{ img.original_filename }}</div>
+      <div class="image-card-meta">
+        <span>{{ img.boxes.count }} box{{ img.boxes.count|pluralize:"es" }}</span>
+        <span class="status-chip status-{{ img.status }}">{{ img.get_status_display }}</span>
+      </div>
+    </div>
+  </a>
+  {% endfor %}
+</div>
+{% endif %}
+
+<script>
+async function uploadFile(input) {
+  const file = input.files[0];
+  if (!file) return;
+  const fd = new FormData();
+  fd.append("image", file);
+  fd.append("csrfmiddlewaretoken", "{{ csrf_token }}");
+  const r = await fetch("/annotator/upload/", { method: "POST", body: fd });
+  const d = await r.json();
+  if (d.redirect) window.location = d.redirect;
+}
+</script>
+</body>
+</html>

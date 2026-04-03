@@ -1,0 +1,1356 @@
+{% load static %}
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>AS · {{ image.original_filename }}</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@300;400;500;600&family=Syne:wght@400;600;700;800&display=swap" rel="stylesheet">
+<style>
+  /* ─── DESIGN TOKENS ─────────────────────────────────────────── */
+  :root {
+    --bg:         #1e1e1e;
+    --bg-mid:     #252525;
+    --bg-panel:   #2a2a2a;
+    --bg-hover:   #323232;
+    --border:     #3a3a3a;
+    --border-hi:  #505050;
+    --text:       #d4d4d4;
+    --text-muted: #7a7a7a;
+    --text-dim:   #555;
+    --accent:     #4a9eff;
+    --accent-dim: #1d4e8f;
+    --green:      #4ecb71;
+    --amber:      #f5a623;
+    --red:        #e05252;
+    --coral-c:    #ff7043;
+    --fish-c:     #29b6f6;
+    --invert-c:   #ce93d8;
+    --algae-c:    #81c784;
+    --other-c:    #90a4ae;
+    --tab-h:      36px;
+    --toolbar-h:  38px;
+    --panel-w:    240px;
+    --mono:       'JetBrains Mono', monospace;
+    --sans:       'Syne', sans-serif;
+  }
+
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+  body {
+    background: var(--bg);
+    color: var(--text);
+    font-family: var(--mono);
+    font-size: 12px;
+    height: 100vh;
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+    user-select: none;
+  }
+
+  /* ─── TITLE BAR ────────────────────────────────────────────── */
+  .title-bar {
+    height: 42px;
+    background: var(--bg-mid);
+    border-bottom: 1px solid var(--border);
+    display: flex;
+    align-items: center;
+    padding: 0 14px;
+    gap: 16px;
+    flex-shrink: 0;
+  }
+  .logo {
+    font-family: var(--sans);
+    font-size: 18px;
+    font-weight: 800;
+    letter-spacing: -0.5px;
+    display: flex;
+    align-items: baseline;
+    gap: 1px;
+  }
+  .logo span.a { color: var(--accent); }
+  .logo span.s { color: var(--text); }
+  .title-filename {
+    color: var(--text-muted);
+    font-size: 11px;
+    flex: 1;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+  .title-status {
+    font-size: 10px;
+    padding: 2px 8px;
+    border-radius: 2px;
+    text-transform: uppercase;
+    letter-spacing: 0.8px;
+  }
+  .status-bound     { background: #1a3550; color: var(--accent); }
+  .status-classify  { background: #2a1f00; color: var(--amber); }
+  .status-specify   { background: #1a2e1a; color: var(--green); }
+  .status-complete  { background: #1a2a1a; color: var(--green); }
+
+  .export-btn {
+    background: none;
+    border: 1px solid var(--border-hi);
+    color: var(--text-muted);
+    padding: 4px 12px;
+    border-radius: 2px;
+    cursor: pointer;
+    font-family: var(--mono);
+    font-size: 11px;
+    transition: all 0.15s;
+  }
+  .export-btn:hover { border-color: var(--accent); color: var(--accent); }
+
+  /* ─── TABS ──────────────────────────────────────────────────── */
+  .tabs {
+    height: var(--tab-h);
+    background: var(--bg-mid);
+    border-bottom: 1px solid var(--border);
+    display: flex;
+    align-items: flex-end;
+    padding: 0 12px;
+    gap: 0;
+    flex-shrink: 0;
+  }
+  .tab {
+    position: relative;
+    height: 28px;
+    padding: 0 18px;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    cursor: pointer;
+    font-family: var(--sans);
+    font-size: 12px;
+    font-weight: 600;
+    color: var(--text-muted);
+    border: 1px solid transparent;
+    border-bottom: none;
+    border-radius: 3px 3px 0 0;
+    transition: color 0.15s, background 0.15s;
+    text-decoration: none;
+  }
+  .tab:hover { color: var(--text); background: var(--bg-hover); }
+  .tab.active {
+    color: var(--text);
+    background: var(--bg-panel);
+    border-color: var(--border);
+    border-bottom-color: var(--bg-panel);
+    margin-bottom: -1px;
+  }
+  .tab-dot {
+    width: 6px; height: 6px;
+    border-radius: 50%;
+    background: currentColor;
+    opacity: 0.6;
+  }
+
+  /* ─── WORKSPACE ─────────────────────────────────────────────── */
+  .workspace {
+    flex: 1;
+    display: flex;
+    overflow: hidden;
+  }
+
+  /* ─── LEFT PANEL ────────────────────────────────────────────── */
+  .panel-left {
+    width: var(--panel-w);
+    background: var(--bg-panel);
+    border-right: 1px solid var(--border);
+    display: flex;
+    flex-direction: column;
+    flex-shrink: 0;
+    overflow: hidden;
+  }
+  .panel-section {
+    border-bottom: 1px solid var(--border);
+    padding: 10px;
+  }
+  .panel-label {
+    font-size: 9px;
+    text-transform: uppercase;
+    letter-spacing: 1.2px;
+    color: var(--text-dim);
+    margin-bottom: 8px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+  }
+  .panel-label-count {
+    font-size: 9px;
+    color: var(--accent);
+    background: var(--accent-dim);
+    padding: 1px 5px;
+    border-radius: 8px;
+  }
+
+  /* ─── TOOLBAR (floated above canvas) ───────────────────────── */
+  .canvas-area {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+    position: relative;
+  }
+  .toolbar {
+    height: var(--toolbar-h);
+    background: var(--bg-mid);
+    border-bottom: 1px solid var(--border);
+    display: flex;
+    align-items: center;
+    padding: 0 10px;
+    gap: 4px;
+    flex-shrink: 0;
+  }
+  .tool-sep { width: 1px; height: 20px; background: var(--border); margin: 0 4px; }
+  .tool-btn {
+    width: 28px; height: 28px;
+    display: flex; align-items: center; justify-content: center;
+    border-radius: 3px;
+    cursor: pointer;
+    color: var(--text-muted);
+    border: 1px solid transparent;
+    background: none;
+    transition: all 0.12s;
+    position: relative;
+  }
+  .tool-btn:hover { background: var(--bg-hover); color: var(--text); }
+  .tool-btn.active {
+    background: var(--accent-dim);
+    border-color: var(--accent);
+    color: var(--accent);
+  }
+  .tool-btn svg { width: 14px; height: 14px; }
+  .tool-label {
+    font-size: 11px;
+    color: var(--text-muted);
+    padding: 0 6px;
+    white-space: nowrap;
+  }
+  .tool-info {
+    margin-left: auto;
+    font-size: 10px;
+    color: var(--text-dim);
+    white-space: nowrap;
+  }
+  #coord-display { min-width: 120px; text-align: right; }
+
+  /* ─── CANVAS CONTAINER ──────────────────────────────────────── */
+  .canvas-scroll {
+    flex: 1;
+    overflow: auto;
+    background:
+      radial-gradient(circle at 50% 50%, #262626 0%, #1a1a1a 100%);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    position: relative;
+  }
+  /* Checkerboard for transparency */
+  .canvas-scroll::before {
+    content: '';
+    position: absolute;
+    inset: 0;
+    background-image:
+      linear-gradient(45deg, #222 25%, transparent 25%),
+      linear-gradient(-45deg, #222 25%, transparent 25%),
+      linear-gradient(45deg, transparent 75%, #222 75%),
+      linear-gradient(-45deg, transparent 75%, #222 75%);
+    background-size: 16px 16px;
+    background-position: 0 0, 0 8px, 8px -8px, -8px 0px;
+    opacity: 0.3;
+    pointer-events: none;
+  }
+
+  .image-wrapper {
+    position: relative;
+    display: inline-block;
+    box-shadow: 0 8px 40px rgba(0,0,0,0.6);
+    cursor: crosshair;
+  }
+  .image-wrapper.tool-select { cursor: default; }
+  .image-wrapper.tool-pan    { cursor: grab; }
+
+  #main-image {
+    display: block;
+    max-width: 100%;
+    height: auto;
+  }
+
+  /* ─── BOUNDING BOXES ────────────────────────────────────────── */
+  #box-layer {
+    position: absolute;
+    inset: 0;
+    pointer-events: none;
+  }
+  .bbox {
+    position: absolute;
+    border: 1.5px solid var(--accent);
+    background: rgba(74,158,255,0.08);
+    pointer-events: all;
+    cursor: move;
+    transition: background 0.1s, border-color 0.1s;
+  }
+  .bbox:hover  { background: rgba(74,158,255,0.18); }
+  .bbox.selected {
+    border-color: #fff;
+    background: rgba(255,255,255,0.08);
+    z-index: 10;
+  }
+  .bbox.deleted {
+    border-color: var(--red);
+    background: rgba(224,82,82,0.08);
+    opacity: 0.4;
+  }
+  .bbox[data-category="coral"]       { border-color: var(--coral-c); background: rgba(255,112,67,0.08); }
+  .bbox[data-category="fish"]        { border-color: var(--fish-c);  background: rgba(41,182,246,0.08); }
+  .bbox[data-category="invertebrate"]{ border-color: var(--invert-c);background: rgba(206,147,216,0.08); }
+  .bbox[data-category="algae"]       { border-color: var(--algae-c); background: rgba(129,199,132,0.08); }
+
+  .bbox-label {
+    position: absolute;
+    top: -18px; left: -1px;
+    font-family: var(--mono);
+    font-size: 9px;
+    padding: 1px 5px;
+    background: var(--accent);
+    color: #000;
+    white-space: nowrap;
+    pointer-events: none;
+    border-radius: 2px 2px 0 0;
+    max-width: 120px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+  .bbox[data-category="coral"]        .bbox-label { background: var(--coral-c); }
+  .bbox[data-category="fish"]         .bbox-label { background: var(--fish-c); }
+  .bbox[data-category="invertebrate"] .bbox-label { background: var(--invert-c); }
+  .bbox[data-category="algae"]        .bbox-label { background: var(--algae-c); }
+  .bbox[data-category="other"]        .bbox-label { background: var(--other-c); }
+
+  .bbox-conf {
+    position: absolute;
+    bottom: -16px; right: -1px;
+    font-size: 8px;
+    color: var(--text-dim);
+    pointer-events: none;
+  }
+
+  /* Resize handles */
+  .resize-handle {
+    position: absolute;
+    width: 8px; height: 8px;
+    background: #fff;
+    border: 1px solid var(--accent);
+    border-radius: 1px;
+    pointer-events: all;
+  }
+  .rh-nw { top: -4px;  left: -4px;  cursor: nw-resize; }
+  .rh-ne { top: -4px;  right: -4px; cursor: ne-resize; }
+  .rh-sw { bottom: -4px; left: -4px; cursor: sw-resize; }
+  .rh-se { bottom: -4px; right: -4px; cursor: se-resize; }
+
+  /* Draw ghost */
+  #draw-ghost {
+    position: absolute;
+    border: 1.5px dashed var(--accent);
+    background: rgba(74,158,255,0.12);
+    pointer-events: none;
+    display: none;
+  }
+
+  /* ─── RIGHT PANEL ───────────────────────────────────────────── */
+  .panel-right {
+    width: var(--panel-w);
+    background: var(--bg-panel);
+    border-left: 1px solid var(--border);
+    display: flex;
+    flex-direction: column;
+    flex-shrink: 0;
+    overflow-y: auto;
+  }
+  .panel-right .panel-section { flex-shrink: 0; }
+
+  /* Box list items */
+  .box-list { display: flex; flex-direction: column; gap: 3px; max-height: 200px; overflow-y: auto; }
+  .box-item {
+    padding: 5px 8px;
+    border-radius: 2px;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    border: 1px solid transparent;
+    transition: background 0.1s;
+  }
+  .box-item:hover   { background: var(--bg-hover); }
+  .box-item.active  { background: var(--accent-dim); border-color: var(--accent); }
+  .box-item-dot { width: 8px; height: 8px; border-radius: 50%; flex-shrink: 0; }
+  .box-item-name { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 10px; }
+  .box-item-conf { font-size: 9px; color: var(--text-dim); }
+
+  /* Properties panel */
+  .prop-group { margin-bottom: 10px; }
+  .prop-row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 3px 0;
+    border-bottom: 1px solid #333;
+  }
+  .prop-key { color: var(--text-muted); font-size: 10px; }
+  .prop-val { color: var(--text); font-size: 10px; text-align: right; }
+
+  /* Taxonomy list */
+  .tax-grid { display: flex; flex-direction: column; gap: 3px; }
+  .tax-item {
+    display: flex; align-items: center; gap: 8px;
+    padding: 5px 8px;
+    border-radius: 3px;
+    cursor: pointer;
+    border: 1px solid transparent;
+    transition: all 0.12s;
+    font-size: 10px;
+  }
+  .tax-item:hover { background: var(--bg-hover); }
+  .tax-item.applied { border-color: var(--accent); background: var(--accent-dim); }
+  .tax-cat-badge {
+    font-size: 8px;
+    padding: 1px 4px;
+    border-radius: 2px;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    flex-shrink: 0;
+  }
+
+  /* AI suggestion card */
+  .ai-card {
+    background: #1a2535;
+    border: 1px solid var(--accent-dim);
+    border-radius: 4px;
+    padding: 10px;
+    margin-bottom: 8px;
+  }
+  .ai-card-header {
+    font-size: 9px;
+    color: var(--accent);
+    text-transform: uppercase;
+    letter-spacing: 0.8px;
+    margin-bottom: 6px;
+    display: flex;
+    align-items: center;
+    gap: 4px;
+  }
+  .ai-suggestion { font-size: 13px; font-family: var(--sans); font-weight: 700; color: var(--text); }
+  .ai-conf-bar { height: 3px; background: #333; border-radius: 2px; margin-top: 6px; }
+  .ai-conf-fill { height: 100%; background: var(--accent); border-radius: 2px; transition: width 0.4s; }
+
+  /* Specify form */
+  .spec-field {
+    width: 100%;
+    background: var(--bg);
+    border: 1px solid var(--border);
+    border-radius: 2px;
+    color: var(--text);
+    font-family: var(--mono);
+    font-size: 11px;
+    padding: 5px 7px;
+    outline: none;
+    transition: border-color 0.15s;
+    resize: none;
+  }
+  .spec-field:focus { border-color: var(--accent); }
+  .spec-label { font-size: 9px; color: var(--text-muted); margin-bottom: 3px; text-transform: uppercase; letter-spacing: 0.6px; }
+  .spec-save-btn {
+    width: 100%;
+    padding: 7px;
+    background: var(--accent);
+    border: none;
+    border-radius: 2px;
+    color: #000;
+    font-family: var(--sans);
+    font-size: 12px;
+    font-weight: 700;
+    cursor: pointer;
+    letter-spacing: 0.3px;
+    transition: opacity 0.15s;
+    margin-top: 4px;
+  }
+  .spec-save-btn:hover { opacity: 0.85; }
+  .spec-save-btn.finalized { background: var(--green); }
+
+  .finalized-badge {
+    display: inline-flex; align-items: center; gap: 4px;
+    font-size: 9px; color: var(--green);
+    text-transform: uppercase; letter-spacing: 0.8px;
+  }
+
+  /* ─── DINO BUTTON ────────────────────────────────────────────── */
+  .dino-btn {
+    padding: 4px 10px;
+    background: none;
+    border: 1px solid var(--border-hi);
+    border-radius: 2px;
+    color: var(--text-muted);
+    font-family: var(--mono);
+    font-size: 10px;
+    cursor: pointer;
+    transition: all 0.15s;
+    white-space: nowrap;
+  }
+  .dino-btn:hover { border-color: var(--amber); color: var(--amber); }
+  .dino-btn.loading { opacity: 0.5; pointer-events: none; }
+
+  /* ─── TOAST ──────────────────────────────────────────────────── */
+  #toast {
+    position: fixed;
+    bottom: 20px; left: 50%;
+    transform: translateX(-50%) translateY(20px);
+    background: #333;
+    color: var(--text);
+    padding: 8px 18px;
+    border-radius: 3px;
+    font-size: 11px;
+    opacity: 0;
+    pointer-events: none;
+    transition: all 0.2s;
+    z-index: 999;
+    border: 1px solid var(--border-hi);
+  }
+  #toast.show { opacity: 1; transform: translateX(-50%) translateY(0); }
+
+  /* ─── SCROLLBAR STYLE ────────────────────────────────────────── */
+  ::-webkit-scrollbar { width: 5px; height: 5px; }
+  ::-webkit-scrollbar-track { background: transparent; }
+  ::-webkit-scrollbar-thumb { background: var(--border-hi); border-radius: 3px; }
+
+  /* ─── UTILITY ────────────────────────────────────────────────── */
+  .hidden { display: none !important; }
+  .mt4 { margin-top: 4px; }
+  .mt8 { margin-top: 8px; }
+  .w100 { width: 100%; }
+  .flex-row { display: flex; align-items: center; gap: 6px; }
+  .flex-1 { flex: 1; }
+</style>
+</head>
+<body>
+
+{{ taxonomy_json|json_script:"taxonomy-data" }}
+
+<!-- ── TITLE BAR ─────────────────────────────────────────────────── -->
+<div class="title-bar">
+  <div class="logo"><span class="a">A</span><span class="s">S</span></div>
+  <div class="title-filename">{{ image.original_filename }}</div>
+  <span class="title-status status-{{ image.status }}">{{ image.get_status_display }}</span>
+  <button class="export-btn" onclick="exportData()">Export JSON</button>
+</div>
+
+<!-- ── TABS ───────────────────────────────────────────────────────── -->
+<div class="tabs">
+  <a class="tab {% if active_tab == 'bound' %}active{% endif %}"
+     href="{% url 'annotator:workspace' image.id 'bound' %}">
+    <span class="tab-dot"></span>Bound
+  </a>
+  <a class="tab {% if active_tab == 'classify' %}active{% endif %}"
+     href="{% url 'annotator:workspace' image.id 'classify' %}">
+    <span class="tab-dot"></span>Classify
+  </a>
+  <a class="tab {% if active_tab == 'specify' %}active{% endif %}"
+     href="{% url 'annotator:workspace' image.id 'specify' %}">
+    <span class="tab-dot"></span>Specify
+  </a>
+</div>
+
+<!-- ── WORKSPACE ─────────────────────────────────────────────────── -->
+<div class="workspace">
+
+  <!-- LEFT PANEL -->
+  <div class="panel-left">
+
+    <!-- BOUND: tools -->
+    <div class="panel-section tab-panel-bound">
+      <div class="panel-label">Boxes <span class="panel-label-count" id="box-count">0</span></div>
+      <div class="box-list" id="box-list-left"></div>
+    </div>
+    <div class="panel-section tab-panel-bound">
+      <div class="panel-label">Detection</div>
+      <button class="dino-btn w100" id="dino-btn" onclick="runDino()">
+        ▶ Run DINOv3 Detection
+      </button>
+    </div>
+
+    <!-- CLASSIFY: category filters -->
+    <div class="panel-section tab-panel-classify hidden">
+      <div class="panel-label">Filter by Category</div>
+      <div id="cat-filter-list" class="tax-grid"></div>
+    </div>
+    <div class="panel-section tab-panel-classify hidden">
+      <div class="panel-label">Boxes <span class="panel-label-count" id="classify-box-count">0</span></div>
+      <div class="box-list" id="classify-box-list"></div>
+    </div>
+
+    <!-- SPECIFY: routing summary -->
+    <div class="panel-section tab-panel-specify hidden">
+      <div class="panel-label">Routing Summary</div>
+      <div id="routing-summary" style="font-size:10px; color:var(--text-muted); line-height:1.7;"></div>
+    </div>
+    <div class="panel-section tab-panel-specify hidden">
+      <div class="panel-label">Boxes <span class="panel-label-count" id="specify-box-count">0</span></div>
+      <div class="box-list" id="specify-box-list"></div>
+    </div>
+
+  </div>
+
+  <!-- CANVAS AREA -->
+  <div class="canvas-area">
+
+    <!-- TOOLBAR -->
+    <div class="toolbar">
+
+      <!-- BOUND tools -->
+      <div id="bound-tools" class="flex-row">
+        <button class="tool-btn active" id="tool-select" title="Select (V)" onclick="setTool('select')">
+          <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5">
+            <path d="M3 2l10 6-5.5 1.5L6 14z"/>
+          </svg>
+        </button>
+        <button class="tool-btn" id="tool-draw" title="Draw box (D)" onclick="setTool('draw')">
+          <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5">
+            <rect x="2" y="2" width="12" height="12" rx="1"/>
+            <line x1="8" y1="2" x2="8" y2="14"/><line x1="2" y1="8" x2="14" y2="8"/>
+          </svg>
+        </button>
+        <button class="tool-btn" id="tool-erase" title="Erase / Delete selected (E)" onclick="setTool('erase')">
+          <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5">
+            <path d="M3 13l10-10M6 13h7M3 10l3 3"/>
+          </svg>
+        </button>
+        <div class="tool-sep"></div>
+        <button class="tool-btn" title="Delete selected" onclick="deleteSelected()">
+          <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5">
+            <polyline points="2,5 14,5"/><path d="M12 5v9a1 1 0 01-1 1H5a1 1 0 01-1-1V5"/>
+            <path d="M6 5V3h4v2"/>
+          </svg>
+        </button>
+        <div class="tool-sep"></div>
+        <span class="tool-label">Opacity:</span>
+        <input type="range" min="0" max="100" value="15" style="width:70px;accent-color:var(--accent)"
+               oninput="setBoxOpacity(this.value)">
+      </div>
+
+      <!-- CLASSIFY tools -->
+      <div id="classify-tools" class="flex-row hidden">
+        <button class="tool-btn active" title="Select box to classify" onclick="setTool('select')">
+          <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5">
+            <path d="M3 2l10 6-5.5 1.5L6 14z"/>
+          </svg>
+        </button>
+        <div class="tool-sep"></div>
+        <span class="tool-label">Click a box to classify it →</span>
+      </div>
+
+      <!-- SPECIFY tools -->
+      <div id="specify-tools" class="flex-row hidden">
+        <button class="tool-btn active" title="Select">
+          <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5">
+            <path d="M3 2l10 6-5.5 1.5L6 14z"/>
+          </svg>
+        </button>
+        <div class="tool-sep"></div>
+        <span class="tool-label">Select a box to specify species →</span>
+      </div>
+
+      <div class="tool-info" id="coord-display">x:— y:—</div>
+    </div>
+
+    <!-- CANVAS -->
+    <div class="canvas-scroll" id="canvas-scroll">
+      <div class="image-wrapper" id="image-wrapper">
+        <img id="main-image" src="{{ image.image.url }}" alt="{{ image.original_filename }}"
+             draggable="false">
+        <div id="box-layer">
+          <div id="draw-ghost"></div>
+        </div>
+      </div>
+    </div>
+
+  </div><!-- /canvas-area -->
+
+  <!-- RIGHT PANEL -->
+  <div class="panel-right">
+
+    <!-- BOUND right panel -->
+    <div class="panel-section tab-panel-bound">
+      <div class="panel-label">Properties</div>
+      <div id="bound-props">
+        <div style="color:var(--text-dim); font-size:10px;">No box selected</div>
+      </div>
+    </div>
+
+    <!-- CLASSIFY right panel -->
+    <div class="panel-section tab-panel-classify hidden">
+      <div class="panel-label">AI Suggestion</div>
+      <div id="ai-suggestion-card">
+        <div style="color:var(--text-dim); font-size:10px;">Select a box to get suggestion</div>
+      </div>
+    </div>
+    <div class="panel-section tab-panel-classify hidden">
+      <div class="panel-label">Taxonomy</div>
+      <div id="taxonomy-list" class="tax-grid"></div>
+    </div>
+
+    <!-- SPECIFY right panel -->
+    <div class="panel-section tab-panel-specify hidden">
+      <div class="panel-label">Identification</div>
+      <div id="specify-form">
+        <div style="color:var(--text-dim); font-size:10px;">Select a box to specify</div>
+      </div>
+    </div>
+    <div class="panel-section tab-panel-specify hidden">
+      <div class="panel-label">Classification</div>
+      <div id="specify-class-info" style="font-size:10px; color:var(--text-muted);">—</div>
+    </div>
+
+  </div><!-- /panel-right -->
+
+</div><!-- /workspace -->
+
+<div id="toast"></div>
+
+<!-- ─────────────────────────────────────────────────────────────── -->
+<script>
+const IMAGE_ID   = "{{ image.id }}";
+const ACTIVE_TAB = "{{ active_tab }}";
+const TAXONOMY = JSON.parse(document.getElementById('taxonomy-data').textContent);
+const CSRF       = "{{ csrf_token }}";
+
+// ── STATE ──────────────────────────────────────────────────────────
+let boxes        = [];   // array of box dicts from server
+let selectedId   = null;
+let currentTool  = "select";
+let imgNatW      = 0, imgNatH = 0;  // natural image dimensions
+let imgDispW     = 0, imgDispH = 0; // displayed dimensions
+let drawStart    = null;
+let isDragging   = false;
+let dragOffX     = 0, dragOffY = 0;
+let dragBoxId    = null;
+let isResizing   = false;
+let resizeHandle = null;
+let resizeStart  = null;
+let resizeBoxSnapshot = null;
+let boxOpacity   = 0.08;
+
+// ── CATEGORY COLOURS ───────────────────────────────────────────────
+const CAT_COLORS = {
+  coral:       "#ff7043",
+  fish:        "#29b6f6",
+  invertebrate:"#ce93d8",
+  algae:       "#81c784",
+  other:       "#90a4ae",
+  null:        "#4a9eff",
+};
+
+// ── INIT ───────────────────────────────────────────────────────────
+document.addEventListener("DOMContentLoaded", async () => {
+  const img = document.getElementById("main-image");
+  if (img.complete) initAfterLoad();
+  else img.addEventListener("load", initAfterLoad);
+  setupTabUI();
+  setupCanvasEvents();
+  setupKeyboard();
+});
+
+function initAfterLoad() {
+  const img = document.getElementById("main-image");
+  imgNatW = img.naturalWidth;
+  imgNatH = img.naturalHeight;
+  updateImgDims();
+  loadBoxes();
+  buildTaxonomyUI();
+  buildCatFilters();
+}
+
+function updateImgDims() {
+  const img = document.getElementById("main-image");
+  imgDispW = img.offsetWidth;
+  imgDispH = img.offsetHeight;
+}
+
+// ── TAB UI ─────────────────────────────────────────────────────────
+function setupTabUI() {
+  const tab = ACTIVE_TAB;
+  document.querySelectorAll(".tab-panel-bound").forEach(el =>
+    el.classList.toggle("hidden", tab !== "bound"));
+  document.querySelectorAll(".tab-panel-classify").forEach(el =>
+    el.classList.toggle("hidden", tab !== "classify"));
+  document.querySelectorAll(".tab-panel-specify").forEach(el =>
+    el.classList.toggle("hidden", tab !== "specify"));
+
+  document.getElementById("bound-tools").classList.toggle("hidden",    tab !== "bound");
+  document.getElementById("classify-tools").classList.toggle("hidden", tab !== "classify");
+  document.getElementById("specify-tools").classList.toggle("hidden",  tab !== "specify");
+}
+
+// ── API HELPERS ────────────────────────────────────────────────────
+async function api(path, method="GET", body=null) {
+  const opts = {
+    method,
+    headers: { "Content-Type": "application/json", "X-CSRFToken": CSRF },
+  };
+  if (body) opts.body = JSON.stringify(body);
+  const r = await fetch(`/annotator/api/${IMAGE_ID}/${path}`, opts);
+  return r.json();
+}
+
+// ── LOAD BOXES ─────────────────────────────────────────────────────
+async function loadBoxes() {
+  const data = await api("boxes/");
+  boxes = data.boxes;
+  renderAllBoxes();
+  renderBoxLists();
+  updateCounts();
+}
+
+// ── RENDER BOXES ON CANVAS ─────────────────────────────────────────
+function renderAllBoxes() {
+  updateImgDims();
+  // Remove existing rendered boxes (but not the ghost)
+  document.querySelectorAll(".bbox").forEach(el => el.remove());
+
+  for (const b of boxes) {
+    if (b.is_deleted && ACTIVE_TAB === "bound") {
+      // Show deleted in bound tab as red
+    }
+    if (b.is_deleted && ACTIVE_TAB !== "bound") continue;
+    renderBox(b);
+  }
+}
+
+function renderBox(b) {
+  const layer = document.getElementById("box-layer");
+  const el = document.createElement("div");
+  el.className = "bbox" + (b.id === selectedId ? " selected" : "") +
+                 (b.is_deleted ? " deleted" : "");
+  el.dataset.id = b.id;
+  el.dataset.category = b.taxonomy_category || "";
+
+  // Position
+  const px = (b.x / 100) * imgDispW;
+  const py = (b.y / 100) * imgDispH;
+  const pw = (b.width / 100) * imgDispW;
+  const ph = (b.height / 100) * imgDispH;
+  el.style.cssText = `left:${px}px;top:${py}px;width:${pw}px;height:${ph}px;`;
+
+  // Opacity from slider
+  const col = CAT_COLORS[b.taxonomy_category] || CAT_COLORS.null;
+  el.style.background = hexAlpha(col, boxOpacity);
+  el.style.borderColor = col;
+
+  // Label chip
+  const lbl = document.createElement("div");
+  lbl.className = "bbox-label";
+  lbl.textContent = b.taxonomy_label || (b.source === "dino" ? `DINO ${Math.round((b.confidence||0)*100)}%` : "manual");
+  lbl.style.background = col;
+  lbl.style.color = lightness(col) > 0.5 ? "#000" : "#fff";
+  el.appendChild(lbl);
+
+  // Confidence footer
+  if (b.confidence != null && !b.taxonomy_label) {
+    const cf = document.createElement("div");
+    cf.className = "bbox-conf";
+    cf.textContent = `${Math.round(b.confidence * 100)}%`;
+    el.appendChild(cf);
+  }
+
+  // Resize handles (bound tab only)
+  if (ACTIVE_TAB === "bound" && !b.is_deleted) {
+    for (const cls of ["rh-nw","rh-ne","rh-sw","rh-se"]) {
+      const rh = document.createElement("div");
+      rh.className = `resize-handle ${cls}`;
+      rh.dataset.handle = cls;
+      el.appendChild(rh);
+    }
+  }
+
+  // Events
+  el.addEventListener("mousedown", e => onBoxMouseDown(e, b.id));
+  el.addEventListener("click",     e => { e.stopPropagation(); selectBox(b.id); });
+
+  layer.appendChild(el);
+}
+
+// ── BOX INTERACTION ────────────────────────────────────────────────
+function selectBox(id) {
+  selectedId = id;
+  renderAllBoxes();
+  const b = boxes.find(x => x.id === id);
+  if (!b) return;
+  updatePropsPanel(b);
+  if (ACTIVE_TAB === "classify") showClassifyPanel(b);
+  if (ACTIVE_TAB === "specify")  showSpecifyPanel(b);
+  highlightListItem(id);
+}
+
+function updatePropsPanel(b) {
+  const p = document.getElementById("bound-props");
+  if (!p) return;
+  p.innerHTML = `
+    <div class="prop-group">
+      <div class="prop-row"><span class="prop-key">Source</span><span class="prop-val">${b.source}</span></div>
+      <div class="prop-row"><span class="prop-key">Confidence</span><span class="prop-val">${b.confidence != null ? Math.round(b.confidence*100)+"%" : "—"}</span></div>
+      <div class="prop-row"><span class="prop-key">X</span><span class="prop-val">${b.x.toFixed(1)}%</span></div>
+      <div class="prop-row"><span class="prop-key">Y</span><span class="prop-val">${b.y.toFixed(1)}%</span></div>
+      <div class="prop-row"><span class="prop-key">W</span><span class="prop-val">${b.width.toFixed(1)}%</span></div>
+      <div class="prop-row"><span class="prop-key">H</span><span class="prop-val">${b.height.toFixed(1)}%</span></div>
+    </div>`;
+}
+
+// ── MOUSE EVENTS (canvas) ──────────────────────────────────────────
+function setupCanvasEvents() {
+  const wrapper = document.getElementById("image-wrapper");
+
+  wrapper.addEventListener("mousedown", onCanvasMouseDown);
+  document.addEventListener("mousemove", onMouseMove);
+  document.addEventListener("mouseup",   onMouseUp);
+
+  // Coord display
+  wrapper.addEventListener("mousemove", e => {
+    const r = wrapper.getBoundingClientRect();
+    const mx = ((e.clientX - r.left) / imgDispW * 100).toFixed(1);
+    const my = ((e.clientY - r.top)  / imgDispH * 100).toFixed(1);
+    document.getElementById("coord-display").textContent = `x:${mx}% y:${my}%`;
+  });
+}
+
+function onCanvasMouseDown(e) {
+  if (e.target.classList.contains("resize-handle")) return;
+  if (e.target.classList.contains("bbox")) return;
+
+  if (currentTool === "draw") {
+    const r = document.getElementById("image-wrapper").getBoundingClientRect();
+    drawStart = { x: e.clientX - r.left, y: e.clientY - r.top };
+    const ghost = document.getElementById("draw-ghost");
+    ghost.style.cssText = `left:${drawStart.x}px;top:${drawStart.y}px;width:0;height:0;display:block;`;
+  } else {
+    selectedId = null;
+    renderAllBoxes();
+    clearPanels();
+  }
+}
+
+function onBoxMouseDown(e, id) {
+  e.stopPropagation();
+  if (e.target.classList.contains("resize-handle")) {
+    isResizing = true;
+    resizeHandle = e.target.dataset.handle;
+    resizeStart = { x: e.clientX, y: e.clientY };
+    resizeBoxSnapshot = { ...boxes.find(b => b.id === id) };
+    return;
+  }
+  if (currentTool === "select" || currentTool === "erase") {
+    if (currentTool === "erase") { deleteBox(id); return; }
+    isDragging = true;
+    dragBoxId  = id;
+    const b    = boxes.find(x => x.id === id);
+    const wrapper = document.getElementById("image-wrapper");
+    const r    = wrapper.getBoundingClientRect();
+    const px   = (b.x / 100) * imgDispW;
+    const py   = (b.y / 100) * imgDispH;
+    dragOffX   = e.clientX - r.left - px;
+    dragOffY   = e.clientY - r.top  - py;
+  }
+}
+
+function onMouseMove(e) {
+  const wrapper = document.getElementById("image-wrapper");
+  const r = wrapper.getBoundingClientRect();
+
+  if (drawStart && currentTool === "draw") {
+    const cx = e.clientX - r.left;
+    const cy = e.clientY - r.top;
+    const ghost = document.getElementById("draw-ghost");
+    const x = Math.min(drawStart.x, cx);
+    const y = Math.min(drawStart.y, cy);
+    const w = Math.abs(cx - drawStart.x);
+    const h = Math.abs(cy - drawStart.y);
+    ghost.style.cssText = `left:${x}px;top:${y}px;width:${w}px;height:${h}px;display:block;`;
+  }
+
+  if (isDragging && dragBoxId) {
+    const cx = e.clientX - r.left - dragOffX;
+    const cy = e.clientY - r.top  - dragOffY;
+    const b  = boxes.find(x => x.id === dragBoxId);
+    b.x = Math.max(0, Math.min(100 - b.width,  (cx / imgDispW) * 100));
+    b.y = Math.max(0, Math.min(100 - b.height, (cy / imgDispH) * 100));
+    renderAllBoxes();
+  }
+
+  if (isResizing && resizeBoxSnapshot) {
+    const dx = ((e.clientX - resizeStart.x) / imgDispW) * 100;
+    const dy = ((e.clientY - resizeStart.y) / imgDispH) * 100;
+    const snap = resizeBoxSnapshot;
+    const b = boxes.find(x => x.id === snap.id);
+    if (resizeHandle === "rh-se") {
+      b.width  = Math.max(2, snap.width  + dx);
+      b.height = Math.max(2, snap.height + dy);
+    } else if (resizeHandle === "rh-sw") {
+      const newW = Math.max(2, snap.width - dx);
+      b.x = snap.x + (snap.width - newW);
+      b.width  = newW;
+      b.height = Math.max(2, snap.height + dy);
+    } else if (resizeHandle === "rh-ne") {
+      b.width  = Math.max(2, snap.width + dx);
+      const newH = Math.max(2, snap.height - dy);
+      b.y = snap.y + (snap.height - newH);
+      b.height = newH;
+    } else if (resizeHandle === "rh-nw") {
+      const newW = Math.max(2, snap.width - dx);
+      const newH = Math.max(2, snap.height - dy);
+      b.x = snap.x + (snap.width - newW);
+      b.y = snap.y + (snap.height - newH);
+      b.width  = newW;
+      b.height = newH;
+    }
+    renderAllBoxes();
+  }
+}
+
+async function onMouseUp(e) {
+  const wrapper = document.getElementById("image-wrapper");
+  const r = wrapper.getBoundingClientRect();
+
+  if (drawStart && currentTool === "draw") {
+    const cx = e.clientX - r.left;
+    const cy = e.clientY - r.top;
+    const x = Math.min(drawStart.x, cx);
+    const y = Math.min(drawStart.y, cy);
+    const w = Math.abs(cx - drawStart.x);
+    const h = Math.abs(cy - drawStart.y);
+    document.getElementById("draw-ghost").style.display = "none";
+    drawStart = null;
+    if (w < 5 || h < 5) return;
+    await createBox(
+      (x / imgDispW) * 100, (y / imgDispH) * 100,
+      (w / imgDispW) * 100, (h / imgDispH) * 100
+    );
+  }
+
+  if (isDragging && dragBoxId) {
+    isDragging = false;
+    const b = boxes.find(x => x.id === dragBoxId);
+    await api(`boxes/${dragBoxId}/`, "PATCH", { x: b.x, y: b.y });
+    dragBoxId = null;
+  }
+
+  if (isResizing && resizeBoxSnapshot) {
+    isResizing = false;
+    const b = boxes.find(x => x.id === resizeBoxSnapshot.id);
+    await api(`boxes/${b.id}/`, "PATCH", { x: b.x, y: b.y, width: b.width, height: b.height });
+    resizeBoxSnapshot = null;
+    resizeHandle = null;
+  }
+}
+
+// ── CREATE / DELETE BOXES ──────────────────────────────────────────
+async function createBox(x, y, w, h) {
+  const data = await api("boxes/", "POST", { x, y, width: w, height: h });
+  boxes.push(data);
+  renderAllBoxes();
+  renderBoxLists();
+  updateCounts();
+  selectBox(data.id);
+  toast("Box created");
+}
+
+async function deleteBox(id) {
+  await api(`boxes/${id}/`, "DELETE");
+  const b = boxes.find(x => x.id === id);
+  if (b) b.is_deleted = true;
+  renderAllBoxes();
+  renderBoxLists();
+  updateCounts();
+  selectedId = null;
+  clearPanels();
+  toast("Box deleted");
+}
+
+function deleteSelected() {
+  if (selectedId) deleteBox(selectedId);
+}
+
+// ── DINO DETECTION ─────────────────────────────────────────────────
+async function runDino() {
+  const btn = document.getElementById("dino-btn");
+  btn.classList.add("loading");
+  btn.textContent = "Running…";
+  try {
+    const data = await api("dino/", "POST");
+    for (const b of data.boxes) boxes.push(b);
+    renderAllBoxes();
+    renderBoxLists();
+    updateCounts();
+    toast(`DINOv3: ${data.boxes.length} boxes detected`);
+  } finally {
+    btn.classList.remove("loading");
+    btn.textContent = "▶ Run DINOv3 Detection";
+  }
+}
+
+// ── TOOL SWITCHING ─────────────────────────────────────────────────
+function setTool(t) {
+  currentTool = t;
+  document.querySelectorAll(".tool-btn").forEach(b => b.classList.remove("active"));
+  const el = document.getElementById(`tool-${t}`);
+  if (el) el.classList.add("active");
+  const w = document.getElementById("image-wrapper");
+  w.classList.remove("tool-select","tool-pan","tool-draw","tool-erase");
+  w.classList.add(`tool-${t}`);
+}
+
+function setupKeyboard() {
+  document.addEventListener("keydown", e => {
+    if (e.target.tagName === "INPUT" || e.target.tagName === "TEXTAREA") return;
+    if (e.key === "v" || e.key === "V") setTool("select");
+    if (e.key === "d" || e.key === "D") setTool("draw");
+    if (e.key === "e" || e.key === "E") setTool("erase");
+    if (e.key === "Delete" || e.key === "Backspace") deleteSelected();
+    if (e.key === "Escape") { selectedId = null; renderAllBoxes(); clearPanels(); }
+  });
+}
+
+// ── BOX LISTS (left panel) ─────────────────────────────────────────
+function renderBoxLists() {
+  const active = boxes.filter(b => !b.is_deleted);
+
+  // Bound
+  const bl = document.getElementById("box-list-left");
+  if (bl) bl.innerHTML = active.map(b => boxListItem(b)).join("");
+
+  // Classify
+  const cl = document.getElementById("classify-box-list");
+  if (cl) cl.innerHTML = active.map(b => boxListItem(b)).join("");
+
+  // Specify (labelled boxes only)
+  const sl = document.getElementById("specify-box-list");
+  if (sl) {
+    const labelled = active.filter(b => b.taxonomy_label);
+    sl.innerHTML = labelled.map(b => boxListItem(b)).join("");
+    updateRoutingSummary(labelled);
+  }
+}
+
+function boxListItem(b) {
+  const col = CAT_COLORS[b.taxonomy_category] || CAT_COLORS.null;
+  const name = b.taxonomy_label || b.species_name || (b.source === "dino" ? "DINO box" : "Manual box");
+  const fin = b.is_finalized ? " ✓" : "";
+  return `<div class="box-item ${b.id === selectedId ? 'active' : ''}"
+               onclick="selectBox('${b.id}')"
+               data-id="${b.id}">
+    <div class="box-item-dot" style="background:${col}"></div>
+    <span class="box-item-name">${name}${fin}</span>
+    <span class="box-item-conf">${b.confidence != null ? Math.round(b.confidence*100)+"%" : ""}</span>
+  </div>`;
+}
+
+function highlightListItem(id) {
+  document.querySelectorAll(".box-item").forEach(el => {
+    el.classList.toggle("active", el.dataset.id === id);
+  });
+}
+
+function updateCounts() {
+  const n = boxes.filter(b => !b.is_deleted).length;
+  document.querySelectorAll("#box-count,#classify-box-count,#specify-box-count")
+    .forEach(el => el.textContent = n);
+}
+
+// ── CLASSIFY PANEL ─────────────────────────────────────────────────
+function buildTaxonomyUI() {
+  const list = document.getElementById("taxonomy-list");
+  if (!list) return;
+  list.innerHTML = TAXONOMY.map(t => `
+    <div class="tax-item" id="tax-${t.id}" onclick="applyLabel(${t.id},'${t.name}','${t.category}')">
+      <span class="tax-cat-badge" style="background:${hexAlpha(CAT_COLORS[t.category]||'#999',0.3)};color:${CAT_COLORS[t.category]||'#999'}">${t.category}</span>
+      <span style="flex:1">${t.name}</span>
+    </div>`).join("");
+}
+
+function buildCatFilters() {
+  const list = document.getElementById("cat-filter-list");
+  if (!list) return;
+  const cats = [...new Set(TAXONOMY.map(t => t.category))];
+  list.innerHTML = cats.map(c => `
+    <div class="tax-item" onclick="filterCat('${c}')">
+      <div class="box-item-dot" style="background:${CAT_COLORS[c]||'#999'}"></div>
+      <span style="flex:1;text-transform:capitalize">${c}</span>
+    </div>`).join("");
+}
+
+async function showClassifyPanel(b) {
+  // AI suggestion
+  const card = document.getElementById("ai-suggestion-card");
+  card.innerHTML = `<div class="ai-card">
+    <div class="ai-card-header">
+      <svg width="10" height="10" viewBox="0 0 16 16" fill="var(--accent)"><circle cx="8" cy="8" r="6"/></svg>
+      Loading AI suggestion…
+    </div></div>`;
+
+  const res = await api(`boxes/${b.id}/ai-suggest/`, "POST");
+  card.innerHTML = `<div class="ai-card">
+    <div class="ai-card-header">
+      <svg width="10" height="10" viewBox="0 0 16 16" fill="var(--accent)"><circle cx="8" cy="8" r="6"/></svg>
+      Claude suggests
+    </div>
+    <div class="ai-suggestion">${res.suggestion}</div>
+    <div class="ai-conf-bar"><div class="ai-conf-fill" style="width:${Math.round(res.confidence*100)}%"></div></div>
+    <div style="font-size:9px;color:var(--text-muted);margin-top:4px">${Math.round(res.confidence*100)}% confidence</div>
+  </div>
+  <button class="spec-save-btn" style="margin-top:4px;font-size:10px"
+    onclick="applySuggestion('${res.suggestion}')">Apply Suggestion</button>`;
+
+  // Reload latest box
+  const fresh = await api("boxes/");
+  boxes = fresh.boxes;
+  // highlight applied label
+  refreshTaxHighlight(b);
+}
+
+function refreshTaxHighlight(b) {
+  document.querySelectorAll(".tax-item").forEach(el => el.classList.remove("applied"));
+  if (b.taxonomy_label) {
+    const match = TAXONOMY.find(t => t.name === b.taxonomy_label);
+    if (match) document.getElementById(`tax-${match.id}`)?.classList.add("applied");
+  }
+}
+
+async function applyLabel(taxId, name, category) {
+  if (!selectedId) { toast("Select a box first"); return; }
+  const data = await api(`boxes/${selectedId}/classify/`, "POST", { taxonomy_label_id: taxId });
+  const b = boxes.find(x => x.id === selectedId);
+  if (b) { b.taxonomy_label = name; b.taxonomy_category = category; }
+  renderAllBoxes();
+  renderBoxLists();
+  document.querySelectorAll(".tax-item").forEach(el => el.classList.remove("applied"));
+  document.getElementById(`tax-${taxId}`)?.classList.add("applied");
+  toast(`Labelled as ${name}`);
+}
+
+async function applySuggestion(name) {
+  const match = TAXONOMY.find(t => t.name === name);
+  if (match) applyLabel(match.id, match.name, match.category);
+  else toast("No taxonomy match – add it via admin");
+}
+
+// ── SPECIFY PANEL ──────────────────────────────────────────────────
+function showSpecifyPanel(b) {
+  const form = document.getElementById("specify-form");
+  const info = document.getElementById("specify-class-info");
+  if (!form) return;
+
+  info.innerHTML = b.taxonomy_label
+    ? `<span style="color:${CAT_COLORS[b.taxonomy_category]||'#999'}">${b.taxonomy_category}</span> / ${b.taxonomy_label}`
+    : "<em>Not classified yet</em>";
+
+  form.innerHTML = `
+    <div class="prop-group">
+      <div class="spec-label">Species / Identification</div>
+      <input class="spec-field" id="spec-species" value="${b.species_name || ''}" placeholder="e.g. Acropora muricata">
+      <div class="spec-label mt8">Researcher Notes</div>
+      <textarea class="spec-field" id="spec-notes" rows="4" placeholder="Observations, conditions, certainty…">${b.researcher_notes || ''}</textarea>
+      ${b.is_finalized
+        ? `<div class="finalized-badge mt4">
+            <svg width="10" height="10" viewBox="0 0 16 16" fill="var(--green)"><circle cx="8" cy="8" r="6"/></svg>
+            Finalised</div>`
+        : `<button class="spec-save-btn mt4" onclick="saveSpecify(false)">Save Draft</button>`}
+      <button class="spec-save-btn finalized mt4" onclick="saveSpecify(true)">
+        ${b.is_finalized ? "✓ Update & Finalise" : "Finalise"}
+      </button>
+    </div>`;
+}
+
+async function saveSpecify(finalise) {
+  if (!selectedId) return;
+  const species = document.getElementById("spec-species")?.value || "";
+  const notes   = document.getElementById("spec-notes")?.value   || "";
+  const data = await api(`boxes/${selectedId}/specify/`, "POST", {
+    species_name: species,
+    researcher_notes: notes,
+    is_finalized: finalise,
+  });
+  const b = boxes.find(x => x.id === selectedId);
+  if (b) { b.species_name = data.species_name; b.researcher_notes = data.researcher_notes; b.is_finalized = data.is_finalized; }
+  renderAllBoxes();
+  renderBoxLists();
+  toast(finalise ? "Box finalised ✓" : "Draft saved");
+}
+
+function updateRoutingSummary(labelled) {
+  const el = document.getElementById("routing-summary");
+  if (!el) return;
+  const counts = {};
+  for (const b of labelled) {
+    const cat = b.taxonomy_category || "other";
+    counts[cat] = (counts[cat] || 0) + 1;
+  }
+  const finalized = labelled.filter(b => b.is_finalized).length;
+  el.innerHTML = Object.entries(counts).map(([cat, n]) =>
+    `<span style="color:${CAT_COLORS[cat]||'#999'}">${cat}</span>: ${n} box${n>1?'es':''}<br>`
+  ).join("") + `<br><span style="color:var(--green)">${finalized} finalised</span> / ${labelled.length} total`;
+}
+
+// ── EXPORT ─────────────────────────────────────────────────────────
+async function exportData() {
+  const data = await api("export/");
+  const blob = new Blob([JSON.stringify(data, null, 2)], { type: "application/json" });
+  const url  = URL.createObjectURL(blob);
+  const a    = document.createElement("a");
+  a.href = url; a.download = `${IMAGE_ID}_annotations.json`;
+  a.click(); URL.revokeObjectURL(url);
+  toast("Exported JSON");
+}
+
+// ── MISC HELPERS ───────────────────────────────────────────────────
+function setBoxOpacity(v) {
+  boxOpacity = v / 100;
+  renderAllBoxes();
+}
+
+function clearPanels() {
+  const p = document.getElementById("bound-props");
+  if (p) p.innerHTML = '<div style="color:var(--text-dim);font-size:10px">No box selected</div>';
+  const f = document.getElementById("specify-form");
+  if (f) f.innerHTML = '<div style="color:var(--text-dim);font-size:10px">Select a box to specify</div>';
+  const ai = document.getElementById("ai-suggestion-card");
+  if (ai) ai.innerHTML = '<div style="color:var(--text-dim);font-size:10px">Select a box to get suggestion</div>';
+  document.querySelectorAll(".tax-item").forEach(el => el.classList.remove("applied"));
+}
+
+function hexAlpha(hex, a) {
+  const r = parseInt(hex.slice(1,3),16);
+  const g = parseInt(hex.slice(3,5),16);
+  const b = parseInt(hex.slice(5,7),16);
+  return `rgba(${r},${g},${b},${a})`;
+}
+
+function lightness(hex) {
+  const r = parseInt(hex.slice(1,3),16)/255;
+  const g = parseInt(hex.slice(3,5),16)/255;
+  const b = parseInt(hex.slice(5,7),16)/255;
+  return 0.299*r + 0.587*g + 0.114*b;
+}
+
+function toast(msg) {
+  const el = document.getElementById("toast");
+  el.textContent = msg;
+  el.classList.add("show");
+  setTimeout(() => el.classList.remove("show"), 2000);
+}
+
+window.addEventListener("resize", () => { updateImgDims(); renderAllBoxes(); });
+</script>
+</body>
+</html>
