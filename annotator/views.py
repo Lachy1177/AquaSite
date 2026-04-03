@@ -120,69 +120,6 @@ def api_classify_box(request, image_id, box_id):
     return JsonResponse(box.to_dict())
 
 
-@require_POST
-def api_ai_suggest(request, image_id, box_id):
-    """
-    Call Claude (via Anthropic API) to suggest a taxonomy label for a cropped box.
-    Returns {"suggestion": "coral", "confidence": 0.91}
-    """
-    image = get_object_or_404(AnalysisImage, pk=image_id)
-    box = get_object_or_404(BoundingBox, pk=box_id, image=image)
-
-    # -----------------------------------------------------------------------
-    # REAL IMPLEMENTATION (uncomment and fill in your Anthropic API key)
-    # -----------------------------------------------------------------------
-    # import anthropic, base64
-    # from PIL import Image as PILImage
-    # import io
-    #
-    # client = anthropic.Anthropic(api_key="YOUR_API_KEY")
-    #
-    # with PILImage.open(image.image.path) as img:
-    #     iw, ih = img.size
-    #     px = int(box.x / 100 * iw)
-    #     py = int(box.y / 100 * ih)
-    #     pw = int(box.width / 100 * iw)
-    #     ph = int(box.height / 100 * ih)
-    #     crop = img.crop((px, py, px + pw, py + ph))
-    #     buf = io.BytesIO()
-    #     crop.save(buf, format="JPEG")
-    #     b64 = base64.b64encode(buf.getvalue()).decode()
-    #
-    # taxonomy_names = list(TaxonomyLabel.objects.values_list("name", flat=True))
-    # response = client.messages.create(
-    #     model="claude-opus-4-5",
-    #     max_tokens=256,
-    #     messages=[{
-    #         "role": "user",
-    #         "content": [
-    #             {"type": "image", "source": {"type": "base64", "media_type": "image/jpeg", "data": b64}},
-    #             {"type": "text", "text": (
-    #                 f"You are a marine biologist assistant. Given this cropped image from an underwater scene, "
-    #                 f"identify what it contains. Choose the best match from this taxonomy: {taxonomy_names}. "
-    #                 f"Reply with JSON only: {{\"suggestion\": \"<name>\", \"confidence\": <0-1>}}"
-    #             )}
-    #         ]
-    #     }]
-    # )
-    # result = json.loads(response.content[0].text)
-    # box.ai_suggested_label = result["suggestion"]
-    # box.ai_suggestion_confidence = result["confidence"]
-    # box.save()
-    # return JsonResponse(result)
-    # -----------------------------------------------------------------------
-
-    # STUB — remove when real implementation above is enabled
-    import random
-    options = ["Staghorn Coral", "Brain Coral", "Reef Fish", "Sea Urchin", "Algae Turf"]
-    suggestion = random.choice(options)
-    confidence = round(random.uniform(0.65, 0.97), 2)
-    box.ai_suggested_label = suggestion
-    box.ai_suggestion_confidence = confidence
-    box.save()
-    return JsonResponse({"suggestion": suggestion, "confidence": confidence})
-
-
 # ---------------------------------------------------------------------------
 # API: DINOv3 auto-detect (stubbed)
 # ---------------------------------------------------------------------------
@@ -199,7 +136,7 @@ def api_dino_detect(request, image_id):
     # DINO_ENDPOINT = "http://your-dino-service/detect"
     # with open(image.image.path, "rb") as f:
     #     resp = req.post(DINO_ENDPOINT, files={"image": f}, data={"threshold": 0.5})
-    # raw_boxes = resp.json()["boxes"]  # expects [{x,y,w,h,confidence}, ...]
+    # raw_boxes = resp.json()["boxes"]  # expects [{x,y,w,h,confidence}, ...] 
     # created = []
     # for rb in raw_boxes:
     #     box = BoundingBox.objects.create(
