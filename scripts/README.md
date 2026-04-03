@@ -10,8 +10,8 @@
 |--------|-------|
 | Per-bag video clips (`clip_000.mp4` … `clip_052.mp4`) | Supabase Storage → `dives/{dive_id}/clips/` |
 | Full-dive video (`full_dive.mp4`) | Supabase Storage → `dives/{dive_id}/` |
-| Sensor readings (IMU, pressure, temperature, sonar, voltage, leak, magnetometer) | `sensor_readings` table |
-| GPS fixes | `gps_readings` table |
+| 1 sensor reading per bag (last IMU snapshot: orientation, angular velocity, linear acceleration, pressure, temperature, sonar, voltage, leak, magnetometer) | `sensor_readings` table |
+| 1 GPS fix per bag (first fix recorded in the bag) | `gps_readings` table |
 | Dive session record | `dives` table |
 
 ---
@@ -141,8 +141,8 @@ Found 53 bag files in C:\...
 
 [00/52] all-EddyReef2_2025-11-09-04-24-46_0.bag
   video  : 312 frames → clip_000.mp4
-  sensors: 1540 rows inserted
-  gps    : 30 rows inserted
+  sensors: 1 row inserted
+  gps    : 1 row inserted
   upload : dives/abc123.../clips/clip_000.mp4
 
 [01/52] all-EddyReef2_2025-11-09-04-25-16_1.bag

@@ -39,7 +39,7 @@ load_env(os.path.join(PROJECT_ROOT, ".env"))
 
 # ── Configuration ──────────────────────────────────────────────────────────────
 
-BAG_DIR = r"C:\path\to\your\bag\folder"   # ← EDIT THIS before running
+BAG_DIR = r"C:\Users\mingx\OneDrive\Desktop\DECO 3801 FYP\2025-11-09-04-24-44+0000_EddyReef2\2025-11-09-04-24-44+0000_EddyReef2"   # ← EDIT THIS before running
 
 DIVE_NAME   = "EddyReef2_2025-11-09"      # Human-readable label for this dive
 CAMERA_FPS  = 10    # Frames per second to use when writing video clips
@@ -132,17 +132,16 @@ def main():
     _registered_types = set()
 
     def register_bag_types(reader):
-        try:
-            from rosbags.typesys import get_types_from_msg
-            add_types = {}
-            for conn in reader.connections:
-                if conn.msgtype not in _registered_types:
-                    add_types.update(get_types_from_msg(conn.msgdef, conn.msgtype))
-                    _registered_types.add(conn.msgtype)
-            if add_types:
-                typestore.register(add_types)
-        except Exception:
-            pass  # standard types will still work
+        from rosbags.typesys import get_types_from_msg
+        add_types = {}
+        for conn in reader.connections:
+            if conn.msgtype not in _registered_types:
+                # msgdef is a (format, text) tuple in rosbags 0.10.x
+                msgdef_text = conn.msgdef[1] if isinstance(conn.msgdef, tuple) else conn.msgdef
+                add_types.update(get_types_from_msg(msgdef_text, conn.msgtype))
+                _registered_types.add(conn.msgtype)
+        if add_types:
+            typestore.register(add_types)
 
     # Detect dive start time from first bag
     with Reader(bags[0]) as b:
@@ -165,8 +164,8 @@ def main():
         print(f"[{i:02d}/{len(bags)-1}] {bag_name}")
 
         clip_path = os.path.join(TEMP_DIR, f"clip_{i:03d}.mp4")
-        sensor_rows = []
-        gps_rows = []
+        sensor_snapshot = None
+        gps_snapshot = None
 
         # Last-known values for slow-publishing sensors
         state = {
@@ -237,9 +236,9 @@ def main():
                     state["mag_y"] = msg.magnetic_field.y
                     state["mag_z"] = msg.magnetic_field.z
 
-                # ── IMU — one row per message, snapshot current state ──────
+                # ── IMU — overwrite snapshot each message; last one is kept ─
                 elif topic == TOPIC_IMU:
-                    sensor_rows.append({
+                    sensor_snapshot = {
                         "dive_id":      dive_id,
                         "recorded_at":  dt_str,
                         "ros_time":     ros_time,
@@ -254,19 +253,20 @@ def main():
                         "imu_lin_acc_y": msg.linear_acceleration.y,
                         "imu_lin_acc_z": msg.linear_acceleration.z,
                         **state,
-                    })
+                    }
 
-                # ── GPS ────────────────────────────────────────────────────
+                # ── GPS — capture first fix only ───────────────────────────
                 elif topic == TOPIC_GPS:
-                    gps_rows.append({
-                        "dive_id":    dive_id,
-                        "recorded_at": dt_str,
-                        "ros_time":   ros_time,
-                        "latitude":   msg.latitude,
-                        "longitude":  msg.longitude,
-                        "altitude":   msg.altitude,
-                        "fix_status": int(msg.status.status),
-                    })
+                    if gps_snapshot is None:
+                        gps_snapshot = {
+                            "dive_id":    dive_id,
+                            "recorded_at": dt_str,
+                            "ros_time":   ros_time,
+                            "latitude":   msg.latitude,
+                            "longitude":  msg.longitude,
+                            "altitude":   msg.altitude,
+                            "fix_status": int(msg.status.status),
+                        }
 
         # Finalise video clip
         if video_writer:
@@ -278,12 +278,12 @@ def main():
             print(f"  video  : no camera frames in this bag")
 
         # Insert to Supabase
-        if sensor_rows:
-            batch_insert(supabase, "sensor_readings", sensor_rows)
-            print(f"  sensors: {len(sensor_rows)} rows inserted")
-        if gps_rows:
-            batch_insert(supabase, "gps_readings", gps_rows)
-            print(f"  gps    : {len(gps_rows)} rows inserted")
+        if sensor_snapshot:
+            supabase.table("sensor_readings").insert(sensor_snapshot).execute()
+            print(f"  sensors: 1 row inserted")
+        if gps_snapshot:
+            supabase.table("gps_readings").insert(gps_snapshot).execute()
+            print(f"  gps    : 1 row inserted")
 
         # Upload clip
         valid_clip = (
