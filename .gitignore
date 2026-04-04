@@ -1,5 +1,6 @@
 # Virtual environment
 .venv/
+venv/
 
 # Database **to ignore at a later date**
 # db.sqlite3
