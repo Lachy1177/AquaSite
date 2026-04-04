@@ -4,6 +4,7 @@ from . import views
 app_name = "annotator"
 
 urlpatterns = [
+    path("/", views.upload_image, name="upload"),
     path("", views.index, name="index"),
     path("upload/", views.upload_image, name="upload"),
     path("<uuid:image_id>/<str:tab>/", views.workspace, name="workspace"),

@@ -539,8 +539,6 @@
 </head>
 <body>
 
-{{ taxonomy_json|json_script:"taxonomy-data" }}
-
 <!-- ── TITLE BAR ─────────────────────────────────────────────────── -->
 <div class="title-bar">
   <div class="logo"><span class="a">A</span><span class="s">S</span></div>
@@ -725,7 +723,7 @@
 <script>
 const IMAGE_ID   = "{{ image.id }}";
 const ACTIVE_TAB = "{{ active_tab }}";
-const TAXONOMY = JSON.parse(document.getElementById('taxonomy-data').textContent);
+const TAXONOMY   = {{ taxonomy_json|safe }};
 const CSRF       = "{{ csrf_token }}";
 
 // ── STATE ──────────────────────────────────────────────────────────
@@ -910,8 +908,21 @@ function updatePropsPanel(b) {
 }
 
 // ── MOUSE EVENTS (canvas) ──────────────────────────────────────────
+function getWrapperRect() {
+  return document.getElementById("image-wrapper").getBoundingClientRect();
+}
+
+function getFreshDims() {
+  const img = document.getElementById("main-image");
+  return { w: img.offsetWidth, h: img.offsetHeight };
+}
+
 function setupCanvasEvents() {
   const wrapper = document.getElementById("image-wrapper");
+
+  // Prevent browser's native image drag from hijacking our mouse gestures
+  wrapper.addEventListener("dragstart", e => e.preventDefault());
+  document.getElementById("main-image").addEventListener("dragstart", e => e.preventDefault());
 
   wrapper.addEventListener("mousedown", onCanvasMouseDown);
   document.addEventListener("mousemove", onMouseMove);
@@ -919,23 +930,33 @@ function setupCanvasEvents() {
 
   // Coord display
   wrapper.addEventListener("mousemove", e => {
-    const r = wrapper.getBoundingClientRect();
-    const mx = ((e.clientX - r.left) / imgDispW * 100).toFixed(1);
-    const my = ((e.clientY - r.top)  / imgDispH * 100).toFixed(1);
+    const r = getWrapperRect();
+    const dims = getFreshDims();
+    const mx = ((e.clientX - r.left) / dims.w * 100).toFixed(1);
+    const my = ((e.clientY - r.top)  / dims.h * 100).toFixed(1);
     document.getElementById("coord-display").textContent = `x:${mx}% y:${my}%`;
   });
 }
 
 function onCanvasMouseDown(e) {
-  if (e.target.classList.contains("resize-handle")) return;
-  if (e.target.classList.contains("bbox")) return;
+  // Only handle clicks directly on the wrapper or the image — not on boxes or handles
+  const isOnBox    = e.target.closest(".bbox");
+  const isOnHandle = e.target.classList.contains("resize-handle");
+  if (isOnHandle || isOnBox) return;
+
+  e.preventDefault(); // stop browser text-selection and native drag
 
   if (currentTool === "draw") {
-    const r = document.getElementById("image-wrapper").getBoundingClientRect();
+    const r = getWrapperRect();
     drawStart = { x: e.clientX - r.left, y: e.clientY - r.top };
     const ghost = document.getElementById("draw-ghost");
-    ghost.style.cssText = `left:${drawStart.x}px;top:${drawStart.y}px;width:0;height:0;display:block;`;
+    ghost.style.left    = drawStart.x + "px";
+    ghost.style.top     = drawStart.y + "px";
+    ghost.style.width   = "0px";
+    ghost.style.height  = "0px";
+    ghost.style.display = "block";
   } else {
+    // Clicked empty canvas — deselect
     selectedId = null;
     renderAllBoxes();
     clearPanels();
@@ -943,75 +964,87 @@ function onCanvasMouseDown(e) {
 }
 
 function onBoxMouseDown(e, id) {
+  e.preventDefault(); // critical: stops browser drag hijack
   e.stopPropagation();
+
   if (e.target.classList.contains("resize-handle")) {
-    isResizing = true;
-    resizeHandle = e.target.dataset.handle;
-    resizeStart = { x: e.clientX, y: e.clientY };
+    isResizing        = true;
+    resizeHandle      = e.target.dataset.handle;
+    resizeStart       = { x: e.clientX, y: e.clientY };
     resizeBoxSnapshot = { ...boxes.find(b => b.id === id) };
     return;
   }
-  if (currentTool === "select" || currentTool === "erase") {
-    if (currentTool === "erase") { deleteBox(id); return; }
+
+  if (currentTool === "erase") {
+    deleteBox(id);
+    return;
+  }
+
+  if (currentTool === "select") {
     isDragging = true;
     dragBoxId  = id;
     const b    = boxes.find(x => x.id === id);
-    const wrapper = document.getElementById("image-wrapper");
-    const r    = wrapper.getBoundingClientRect();
-    const px   = (b.x / 100) * imgDispW;
-    const py   = (b.y / 100) * imgDispH;
-    dragOffX   = e.clientX - r.left - px;
-    dragOffY   = e.clientY - r.top  - py;
+    const r    = getWrapperRect();
+    const dims = getFreshDims();
+    dragOffX   = e.clientX - r.left - (b.x / 100) * dims.w;
+    dragOffY   = e.clientY - r.top  - (b.y / 100) * dims.h;
   }
 }
 
 function onMouseMove(e) {
-  const wrapper = document.getElementById("image-wrapper");
-  const r = wrapper.getBoundingClientRect();
+  const r    = getWrapperRect();
+  const dims = getFreshDims();
 
-  if (drawStart && currentTool === "draw") {
+  if (drawStart) {
     const cx = e.clientX - r.left;
     const cy = e.clientY - r.top;
+    const x  = Math.min(drawStart.x, cx);
+    const y  = Math.min(drawStart.y, cy);
+    const w  = Math.abs(cx - drawStart.x);
+    const h  = Math.abs(cy - drawStart.y);
     const ghost = document.getElementById("draw-ghost");
-    const x = Math.min(drawStart.x, cx);
-    const y = Math.min(drawStart.y, cy);
-    const w = Math.abs(cx - drawStart.x);
-    const h = Math.abs(cy - drawStart.y);
-    ghost.style.cssText = `left:${x}px;top:${y}px;width:${w}px;height:${h}px;display:block;`;
+    ghost.style.left   = x + "px";
+    ghost.style.top    = y + "px";
+    ghost.style.width  = w + "px";
+    ghost.style.height = h + "px";
+    ghost.style.display = "block";
   }
 
   if (isDragging && dragBoxId) {
     const cx = e.clientX - r.left - dragOffX;
     const cy = e.clientY - r.top  - dragOffY;
     const b  = boxes.find(x => x.id === dragBoxId);
-    b.x = Math.max(0, Math.min(100 - b.width,  (cx / imgDispW) * 100));
-    b.y = Math.max(0, Math.min(100 - b.height, (cy / imgDispH) * 100));
-    renderAllBoxes();
+    if (b) {
+      b.x = Math.max(0, Math.min(100 - b.width,  (cx / dims.w) * 100));
+      b.y = Math.max(0, Math.min(100 - b.height, (cy / dims.h) * 100));
+      renderAllBoxes();
+    }
   }
 
   if (isResizing && resizeBoxSnapshot) {
-    const dx = ((e.clientX - resizeStart.x) / imgDispW) * 100;
-    const dy = ((e.clientY - resizeStart.y) / imgDispH) * 100;
+    const dx   = ((e.clientX - resizeStart.x) / dims.w) * 100;
+    const dy   = ((e.clientY - resizeStart.y) / dims.h) * 100;
     const snap = resizeBoxSnapshot;
-    const b = boxes.find(x => x.id === snap.id);
+    const b    = boxes.find(x => x.id === snap.id);
+    if (!b) return;
     if (resizeHandle === "rh-se") {
       b.width  = Math.max(2, snap.width  + dx);
       b.height = Math.max(2, snap.height + dy);
     } else if (resizeHandle === "rh-sw") {
       const newW = Math.max(2, snap.width - dx);
-      b.x = snap.x + (snap.width - newW);
+      b.x      = snap.x + (snap.width - newW);
       b.width  = newW;
       b.height = Math.max(2, snap.height + dy);
     } else if (resizeHandle === "rh-ne") {
-      b.width  = Math.max(2, snap.width + dx);
-      const newH = Math.max(2, snap.height - dy);
-      b.y = snap.y + (snap.height - newH);
+      b.width       = Math.max(2, snap.width + dx);
+      const newH    = Math.max(2, snap.height - dy);
+      b.y      = snap.y + (snap.height - newH);
       b.height = newH;
     } else if (resizeHandle === "rh-nw") {
-      const newW = Math.max(2, snap.width - dx);
+      const newW = Math.max(2, snap.width  - dx);
       const newH = Math.max(2, snap.height - dy);
-      b.x = snap.x + (snap.width - newW);
-      b.y = snap.y + (snap.height - newH);
+      b.x      = snap.x + (snap.width  - newW);
+      b.y      = snap.y + (snap.height - newH);
       b.width  = newW;
       b.height = newH;
     }
@@ -1020,38 +1053,44 @@ function onMouseMove(e) {
 }
 
 async function onMouseUp(e) {
-  const wrapper = document.getElementById("image-wrapper");
-  const r = wrapper.getBoundingClientRect();
+  const r    = getWrapperRect();
+  const dims = getFreshDims();
 
-  if (drawStart && currentTool === "draw") {
+  // ── Finish drawing ──────────────────────────────────────────────
+  if (drawStart) {
     const cx = e.clientX - r.left;
     const cy = e.clientY - r.top;
-    const x = Math.min(drawStart.x, cx);
-    const y = Math.min(drawStart.y, cy);
-    const w = Math.abs(cx - drawStart.x);
-    const h = Math.abs(cy - drawStart.y);
+    const x  = Math.min(drawStart.x, cx);
+    const y  = Math.min(drawStart.y, cy);
+    const w  = Math.abs(cx - drawStart.x);
+    const h  = Math.abs(cy - drawStart.y);
     document.getElementById("draw-ghost").style.display = "none";
     drawStart = null;
-    if (w < 5 || h < 5) return;
-    await createBox(
-      (x / imgDispW) * 100, (y / imgDispH) * 100,
-      (w / imgDispW) * 100, (h / imgDispH) * 100
-    );
+    if (w >= 5 && h >= 5) {
+      await createBox(
+        (x / dims.w) * 100, (y / dims.h) * 100,
+        (w / dims.w) * 100, (h / dims.h) * 100
+      );
+    }
+    return; // don't also fire drag/resize cleanup
   }
 
+  // ── Finish dragging ─────────────────────────────────────────────
   if (isDragging && dragBoxId) {
-    isDragging = false;
-    const b = boxes.find(x => x.id === dragBoxId);
-    await api(`boxes/${dragBoxId}/`, "PATCH", { x: b.x, y: b.y });
-    dragBoxId = null;
+    isDragging     = false;
+    const savedId  = dragBoxId;
+    dragBoxId      = null;
+    const b        = boxes.find(x => x.id === savedId);
+    if (b) await api(`boxes/${savedId}/`, "PATCH", { x: b.x, y: b.y });
   }
 
+  // ── Finish resizing ─────────────────────────────────────────────
   if (isResizing && resizeBoxSnapshot) {
-    isResizing = false;
-    const b = boxes.find(x => x.id === resizeBoxSnapshot.id);
-    await api(`boxes/${b.id}/`, "PATCH", { x: b.x, y: b.y, width: b.width, height: b.height });
+    isResizing        = false;
+    const b           = boxes.find(x => x.id === resizeBoxSnapshot.id);
     resizeBoxSnapshot = null;
-    resizeHandle = null;
+    resizeHandle      = null;
+    if (b) await api(`boxes/${b.id}/`, "PATCH", { x: b.x, y: b.y, width: b.width, height: b.height });
   }
 }
 
