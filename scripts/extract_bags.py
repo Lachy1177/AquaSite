@@ -313,45 +313,6 @@ def main():
 
         print()
 
-    # ── Merge all clips into one full-dive video ───────────────────────────────
-    valid_clips = [
-        p for p in clip_paths
-        if p and os.path.exists(p) and os.path.getsize(p) > 0
-    ]
-
-    if valid_clips:
-        filelist_path = os.path.join(TEMP_DIR, "filelist.txt")
-        with open(filelist_path, "w") as f:
-            for cp in valid_clips:
-                # ffmpeg requires forward slashes even on Windows
-                f.write(f"file '{cp.replace(chr(92), '/')}'\n")
-
-        full_video_path = os.path.join(TEMP_DIR, "full_dive.mp4")
-        print("Merging clips into full_dive.mp4 ...")
-        subprocess.run(
-            [
-                "ffmpeg", "-y",
-                "-f", "concat", "-safe", "0",
-                "-i", filelist_path,
-                "-c", "copy",
-                full_video_path,
-            ],
-            check=True,
-        )
-
-        storage_path = f"dives/{dive_id}/full_dive.mp4"
-        upload_to_storage(supabase, full_video_path, storage_path)
-        supabase.table("dive_videos").insert({
-            "dive_id":     dive_id,
-            "video_type":  "full",
-            "bag_filename": None,
-            "clip_index":  None,
-            "storage_path": storage_path,
-        }).execute()
-        print(f"✓ Uploaded full_dive.mp4 → {storage_path}")
-    else:
-        print("No valid clips found — skipping full video merge.")
-
     print(f"\n✓ Done.  Dive ID: {dive_id}")
 
 

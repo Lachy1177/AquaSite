@@ -9,7 +9,6 @@
 | Output | Where |
 |--------|-------|
 | Per-bag video clips (`clip_000.mp4` … `clip_052.mp4`) | Supabase Storage → `dives/{dive_id}/clips/` |
-| Full-dive video (`full_dive.mp4`) | Supabase Storage → `dives/{dive_id}/` |
 | 1 sensor reading per bag (last IMU snapshot: orientation, angular velocity, linear acceleration, pressure, temperature, sonar, voltage, leak, magnetometer) | `sensor_readings` table |
 | 1 GPS fix per bag (first fix recorded in the bag) | `gps_readings` table |
 | Dive session record | `dives` table |
@@ -148,9 +147,6 @@ Found 53 bag files in C:\...
 [01/52] all-EddyReef2_2025-11-09-04-25-16_1.bag
   ...
 
-Merging clips into full_dive.mp4 ...
-✓ Uploaded full_dive.mp4 → dives/abc123.../full_dive.mp4
-
 ✓ Done.  Dive ID: abc123...
 ```
 
@@ -163,5 +159,5 @@ After the script finishes:
 1. **Supabase Table Editor** → `dives` — should have 1 row
 2. **Supabase Table Editor** → `sensor_readings` — should have thousands of rows
 3. **Supabase Table Editor** → `gps_readings` — should have hundreds of rows
-4. **Supabase Table Editor** → `dive_videos` — should have 53 clip rows + 1 full row
-5. **Supabase Storage** → `dive-videos` bucket → `dives/{dive_id}/` — should contain `clips/` folder and `full_dive.mp4`
+4. **Supabase Table Editor** → `dive_videos` — should have 53 clip rows
+5. **Supabase Storage** → `dive-videos` bucket → `dives/{dive_id}/clips/` — should contain 53 clip files
