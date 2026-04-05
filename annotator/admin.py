@@ -1,5 +1,5 @@
 from django.contrib import admin
-from .models import AnalysisImage, BoundingBox, TaxonomyLabel
+from .models import AnalysisImage, BoundingBox, TaxonomyLabel, UserProfile
 
 
 @admin.register(TaxonomyLabel)
@@ -35,3 +35,6 @@ class BoundingBoxAdmin(admin.ModelAdmin):
     ]
     list_filter = ["source", "is_finalized", "is_deleted", "taxonomy_label__category"]
     search_fields = ["image__original_filename", "species_name"]
+
+
+admin.site.register(UserProfile)
