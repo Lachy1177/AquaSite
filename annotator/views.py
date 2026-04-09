@@ -20,6 +20,7 @@ def index(request):
     images = AnalysisImage.objects.all().order_by("-uploaded_at")
     return render(request, "annotator/index.html", {"images": images})
 
+@login_required
 @require_POST
 def upload_image(request):
     role = get_user_role(request.user)
