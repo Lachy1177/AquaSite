@@ -22,7 +22,7 @@ multidict==6.7.1
 numpy==2.4.4
 opencv-python==4.11.0.86
 packaging==26.0
-Pillow==9.5.0
+Pillow==11.0.0
 postgrest==1.0.2
 propcache==0.4.1
 psycopg2-binary==2.9.9
