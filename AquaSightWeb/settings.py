@@ -105,6 +105,7 @@ else:
 # Fallbacks provided so GitHub Actions doesn't crash when running tests
 SUPABASE_URL = config('SUPABASE_URL', default='https://dummy.supabase.co')
 SUPABASE_KEY = config('SUPABASE_KEY', default='dummy-key')
+SUPABASE_IMAGES_BUCKET = config('SUPABASE_IMAGES_BUCKET', default='')
 
 
 # Password validation

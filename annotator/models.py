@@ -33,7 +33,7 @@ class AnalysisImage(models.Model):
         ("complete", "Complete"),
     ]
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
-    image = models.ImageField(upload_to="analysis_images/")
+    image_url = models.CharField(max_length=500, blank=True, default='')
     original_filename = models.CharField(max_length=255, blank=True)
     uploaded_by = models.ForeignKey(User, on_delete=models.SET_NULL, null=True, related_name="uploaded_images")
     uploaded_at = models.DateTimeField(auto_now_add=True)

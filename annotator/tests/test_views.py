@@ -3,6 +3,7 @@ from django.urls import reverse
 from django.contrib.auth.models import User
 from annotator.models import AnalysisImage, BoundingBox, UserProfile
 from django.core.files.uploadedfile import SimpleUploadedFile
+from unittest.mock import patch
 import json
 
 
@@ -18,7 +19,11 @@ class UploadImageTests(TestCase):
         self.user = make_user('annotator1', 'annotator')
         self.client.login(username='annotator1', password='testpass123')
 
-    def test_upload_image_success(self):
+    @patch(
+        'annotator.views.upload_image_to_supabase',
+        return_value='https://example.supabase.co/storage/v1/object/public/analysis-images/test.jpg'
+    )
+    def test_upload_image_success(self, mock_upload):
         image = SimpleUploadedFile(
             "test.jpg",
             b"file_content",
@@ -28,6 +33,7 @@ class UploadImageTests(TestCase):
         response = self.client.post(url, {"image": image})
         self.assertEqual(response.status_code, 200)
         self.assertEqual(AnalysisImage.objects.count(), 1)
+        self.assertIn('supabase', AnalysisImage.objects.first().image_url)
 
     def test_upload_image_no_file(self):
         url = reverse("annotator:upload")

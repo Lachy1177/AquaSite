@@ -6,7 +6,7 @@ from django.views.decorators.http import require_POST, require_http_methods
 from django.views.decorators.csrf import csrf_exempt
 from django.contrib.auth.decorators import login_required
 from django.utils import timezone
-from django.core.files.storage import default_storage
+from .supabase_storage import upload_image_to_supabase
 from django.http import HttpResponseForbidden
 from .models import AnalysisImage, BoundingBox, TaxonomyLabel, UserProfile
 
@@ -31,8 +31,17 @@ def upload_image(request):
     if not f:
         return JsonResponse({"error": "No file provided"}, status=400)
 
+    image_id = uuid.uuid4()
+    storage_path = f"analysis_images/{image_id}/{f.name}"
+
+    try:
+        public_url = upload_image_to_supabase(f, storage_path)
+    except Exception as exc:
+        return JsonResponse({"error": f"Storage upload failed: {exc}"}, status=500)
+
     img = AnalysisImage.objects.create(
-        image=f,
+        id=image_id,
+        image_url=public_url,
         original_filename=f.name,
         uploaded_by=request.user if request.user.is_authenticated else None,
     )
@@ -186,11 +195,14 @@ def api_dino_detect(request, image_id):
 
     REAL IMPLEMENTATION (uncomment when DINOv3 endpoint is available):
     -----------------------------------------------------------------------
+    NOTE: images are now stored in Supabase Storage (image.image_url), not on
+    local disk. Fetch image bytes via requests.get(image.image_url).content
+    instead of opening image.image.path.
     # import requests as req
     # image = get_object_or_404(AnalysisImage, pk=image_id)
     # DINO_ENDPOINT = "http://your-dino-service/detect"
-    # with open(image.image.path, "rb") as f:
-    #     resp = req.post(DINO_ENDPOINT, files={"image": f}, data={"threshold": 0.5})
+    # img_bytes = req.get(image.image_url).content
+    # resp = req.post(DINO_ENDPOINT, files={"image": img_bytes}, data={"threshold": 0.5})
     # raw_boxes = resp.json()["boxes"]  # expects [{x,y,w,h,confidence}, ...] 
     # created = []
     # for rb in raw_boxes:
