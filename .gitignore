@@ -21,3 +21,6 @@ media/
 
 # Claude 
 claude.md
+
+extracted_frames/
+dino_pipeline.py

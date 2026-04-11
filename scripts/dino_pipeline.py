@@ -70,7 +70,9 @@ parser.add_argument(
         "annotator = save to Django database only (appears in annotation workspace)\n"
         "both      = upload to Supabase AND save to database (default)"
     )
+   
 )
+args = parser.parse_args()
 
 
 # ── Load dependencies ──────────────────────────────────────────────────────────
@@ -88,7 +90,6 @@ print(f"  CUDA     : {torch.cuda.is_available()}")
 if torch.cuda.is_available():
     print(f"  GPU      : {torch.cuda.get_device_name(0)}")
 print(f"  Mode     : {args.mode}")
-print(f"  Clusters : {args.clusters}")
 
 DEVICE = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
@@ -231,7 +232,7 @@ def main():
 
     for i, frame_path in enumerate(selected_paths):
         filename     = f"frame_{uuid.uuid4().hex}.jpg"
-        storage_path = f"analysis_images/{filename}"
+        storage_path = f"analysis_images_test/{filename}"
 
         # Upload to Supabase Storage
         if args.mode in ("db", "both"):
@@ -253,6 +254,19 @@ def main():
 
         if (i + 1) % 20 == 0:
             print(f"  Processed {i+1}/{len(selected_paths)} frames...")
+
+    # ── Step 6: Delete unchosen frames from extracted_frames/ ─────────────────
+    print(f"\n── Step 6: Cleaning up unchosen frames...")
+    deleted_count = 0
+    for path in valid_paths:
+        if path not in selected_paths:
+            try:
+                os.remove(path)
+                deleted_count += 1
+            except Exception as e:
+                print(f"  WARNING: Could not delete {path} - {e}")
+    print(f"  Deleted {deleted_count} unchosen frames")
+    print(f"  Kept    {len(selected_paths)} selected frames")
 
     # ── Done ──────────────────────────────────────────────────────────────────
     print(f"\n✓ Pipeline complete!")

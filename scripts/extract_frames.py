@@ -139,7 +139,7 @@ def main():
     print(f"\n✓ Done!")
     print(f"  Total frames extracted : {total_frames}")
     print(f"  Saved to               : {OUTPUT_DIR}")
-    print(f"\nNext step: run  python scripts/dino_classify.py")
+   
 
 
 if __name__ == "__main__":
