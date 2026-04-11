@@ -115,7 +115,7 @@
 <div class="image-grid">
   {% for img in images %}
   <a class="image-card" href="{% url 'annotator:workspace' img.id img.status %}">
-    <img src="{{ img.image.url }}" alt="{{ img.original_filename }}">
+    <img src="{{ img.image_url }}" alt="{{ img.original_filename }}">
     <div class="image-card-body">
       <div class="image-card-name">{{ img.original_filename }}</div>
       <div class="image-card-meta">

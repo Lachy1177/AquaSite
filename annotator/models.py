@@ -1,7 +1,8 @@
 from django.db import models
 from django.contrib.auth.models import User
 import uuid
-
+from django.db.models.signals import post_save
+from django.dispatch import receiver
 
 class TaxonomyLabel(models.Model):
     """Controlled vocabulary for classification."""
@@ -32,7 +33,7 @@ class AnalysisImage(models.Model):
         ("complete", "Complete"),
     ]
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
-    image = models.ImageField(upload_to="analysis_images/")
+    image_url = models.CharField(max_length=500, blank=True, default='')
     original_filename = models.CharField(max_length=255, blank=True)
     uploaded_by = models.ForeignKey(User, on_delete=models.SET_NULL, null=True, related_name="uploaded_images")
     uploaded_at = models.DateTimeField(auto_now_add=True)
@@ -116,3 +117,29 @@ class BoundingBox(models.Model):
 
     class Meta:
         ordering = ["created_at"]
+    
+class UserProfile(models.Model):
+    ROLE_CHOICES = [
+        ("admin", "Admin"),
+        ("annotator", "Annotator"),
+        ("classifier", "Classifier"),
+        ("researcher", "Researcher"),
+        ("viewer", "Viewer"),
+    ]
+
+    user = models.OneToOneField(User, on_delete=models.CASCADE)
+    role = models.CharField(max_length=20, choices=ROLE_CHOICES, default="viewer")
+
+    def __str__(self):
+        return f"{self.user.username} - {self.role}"
+    
+
+@receiver(post_save, sender=User)
+def create_user_profile(sender, instance, created, **kwargs):
+    if created:
+        UserProfile.objects.create(user=instance)
+
+
+@receiver(post_save, sender=User)
+def save_user_profile(sender, instance, **kwargs):
+    UserProfile.objects.get_or_create(user=instance)
