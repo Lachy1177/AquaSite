@@ -18,7 +18,7 @@ from decouple import config
 BASE_DIR = Path(__file__).resolve().parent.parent
 
 #path to get media, such as images and data
-MEDIA_URL = '/media/'
+MEDIA_URL ='https://nmnpkuwdtfqtwrajniph.supabase.co/storage/v1/object/public/dive-videos/'
 MEDIA_ROOT = os.path.join(BASE_DIR, 'media')
 
 # Quick-start development settings - unsuitable for production
