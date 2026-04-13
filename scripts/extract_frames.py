@@ -17,7 +17,7 @@ import cv2
 import urllib.request
 import tempfile
 
-# ── Locate project root and load .env ─────────────────────────────────────────
+#  Locate project root and load .env 
 SCRIPT_DIR   = os.path.dirname(os.path.abspath(__file__))
 PROJECT_ROOT = os.path.dirname(SCRIPT_DIR)
 
@@ -35,7 +35,7 @@ def load_env(path):
 
 load_env(os.path.join(PROJECT_ROOT, ".env"))
 
-# ── Configuration ──────────────────────────────────────────────────────────────
+#  Configuration 
 
 SUPABASE_URL   = os.environ.get("SUPABASE_URL", "")
 SUPABASE_KEY   = os.environ.get("SUPABASE_KEY", "")
@@ -52,7 +52,7 @@ FRAME_EVERY_SEC = 2
 # Where to save the extracted frames on your PC
 OUTPUT_DIR = os.path.join(PROJECT_ROOT, "extracted_frames")
 
-# ── Main ───────────────────────────────────────────────────────────────────────
+#  Main 
 
 def extract_frames_from_video(video_path, output_dir, clip_name, every_n_sec=2):
     """
