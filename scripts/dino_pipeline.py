@@ -26,7 +26,7 @@ import uuid
 import glob
 import argparse
 
-#  Locate project root and load .env 
+# ── Locate project root and load .env ─────────────────────────────────────────
 SCRIPT_DIR   = os.path.dirname(os.path.abspath(__file__))
 PROJECT_ROOT = os.path.dirname(SCRIPT_DIR)
 
@@ -44,7 +44,7 @@ def load_env(path):
 
 load_env(os.path.join(PROJECT_ROOT, ".env"))
 
-# Configuration 
+# ── Configuration ──────────────────────────────────────────────────────────────
 
 SUPABASE_URL   = os.environ.get("SUPABASE_URL", "")
 SUPABASE_KEY   = os.environ.get("SUPABASE_KEY", "")
@@ -56,7 +56,7 @@ FRAMES_DIR = os.path.join(PROJECT_ROOT, "extracted_frames")
 # Default number of diverse frames to select
 DEFAULT_CLUSTERS = 200
 
-#  Parse arguments
+# ── Parse arguments ────────────────────────────────────────────────────────────
 
 parser = argparse.ArgumentParser(
     description="DINO classify and upload frames"
@@ -75,7 +75,7 @@ parser.add_argument(
 args = parser.parse_args()
 
 
-#  Load dependencies
+# ── Load dependencies ──────────────────────────────────────────────────────────
 
 print("Loading dependencies...")
 import cv2
@@ -93,7 +93,7 @@ print(f"  Mode     : {args.mode}")
 
 DEVICE = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
-#  Load DINOv3 model
+# ── Load DINOv3 ────────────────────────────────────────────────────────────────
 
 print("\nLoading DINOv3 model...")
 model = torch.hub.load("facebookresearch/dinov2", "dinov2_vits14")
@@ -160,7 +160,7 @@ def main():
         print("Run extract_frames.py first!")
         sys.exit(1)
 
-    # Step 1: Find all extracted frames
+    # ── Step 1: Find all extracted frames ─────────────────────────────────────
     print(f"\n── Step 1: Finding extracted frames in {FRAMES_DIR}...")
     frame_paths = sorted(glob.glob(os.path.join(FRAMES_DIR, "*.jpg")))
     print(f"  Found {len(frame_paths)} frames")
@@ -169,7 +169,7 @@ def main():
         print("No frames found! Run extract_frames.py first.")
         sys.exit(1)
 
-    # Step 2: Run DINO on every frame
+    # ── Step 2: Run DINO on every frame ───────────────────────────────────────
     print(f"\n── Step 2: Computing DINO embeddings on {DEVICE}...")
     print(f"  This may take a few minutes...\n")
 
@@ -187,7 +187,7 @@ def main():
 
     print(f"  Done - {len(valid_paths)} valid frames embedded")
 
-    # Step 3: Cluster similar frames together using K-Means
+    # ── Step 3: Cluster similar frames together ────────────────────────────────
     n_clusters = min(DEFAULT_CLUSTERS, len(valid_paths))
     print(f"\n── Step 3: Clustering {len(valid_paths)} frames into {n_clusters} groups...")
 
@@ -196,7 +196,7 @@ def main():
     labels = kmeans.fit_predict(embeddings_matrix)
     print(f"  Clustering complete")
 
-    # Step 4: Pick best frame from each cluster 
+    # ── Step 4: Pick best frame from each cluster ──────────────────────────────
     print(f"\n── Step 4: Selecting most representative frame per group...")
     selected_paths = []
 
