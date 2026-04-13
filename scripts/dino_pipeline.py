@@ -232,7 +232,7 @@ def main():
 
     for i, frame_path in enumerate(selected_paths):
         filename     = f"frame_{uuid.uuid4().hex}.jpg"
-        storage_path = f"analysis_images_test/{filename}"
+        storage_path = f"analysis_images/{filename}"
 
         # Upload to Supabase Storage
         if args.mode in ("db", "both"):
