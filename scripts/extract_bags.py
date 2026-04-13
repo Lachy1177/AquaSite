@@ -16,7 +16,7 @@ from datetime import datetime, timezone
 import cv2
 import numpy as np
 
-# ── Locate project root and load .env ─────────────────────────────────────────
+# Locate project root and load .env
 
 SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
 PROJECT_ROOT = os.path.dirname(SCRIPT_DIR)
@@ -37,11 +37,11 @@ def load_env(env_path):
 
 load_env(os.path.join(PROJECT_ROOT, ".env"))
 
-# ── Configuration ──────────────────────────────────────────────────────────────
+# Configuration 
 
 BAG_DIR = r"C:\Users\mingx\OneDrive\Desktop\DECO 3801 FYP\2025-11-09-04-24-44+0000_EddyReef2\2025-11-09-04-24-44+0000_EddyReef2"   # ← EDIT THIS before running
 
-DIVE_NAME   = "EddyReef2_2025-11-09"      # Human-readable label for this dive
+DIVE_NAME   = "EddyReef2_2025-11-09"  # Label for this dive
 CAMERA_FPS  = 10    # Frames per second to use when writing video clips
 BATCH_SIZE  = 500   # Max rows per Supabase insert call
 TEMP_DIR    = tempfile.mkdtemp(prefix="aquasight_")
@@ -50,7 +50,7 @@ SUPABASE_URL    = os.environ.get("SUPABASE_URL", "")
 SUPABASE_KEY    = os.environ.get("SUPABASE_KEY", "")
 STORAGE_BUCKET  = os.environ.get("SUPABASE_STORAGE_BUCKET", "dive-videos")
 
-# ── ROS topic names ────────────────────────────────────────────────────────────
+# ROS topic names
 
 TOPIC_IMU      = "/glider_1/sensor/imu"
 TOPIC_PRESSURE = "/glider_1/sensor/pressure"
@@ -67,7 +67,7 @@ SENSOR_TOPICS = [
     TOPIC_VOLTAGE, TOPIC_LEAK, TOPIC_MAG,
 ]
 
-# ── Helpers ────────────────────────────────────────────────────────────────────
+# Helpers
 
 def ros_time_to_iso(t_ns):
     """Convert a rosbags nanosecond timestamp to a UTC ISO-8601 string."""
@@ -99,7 +99,7 @@ def upload_to_storage(supabase, local_path, storage_path):
         file_options={"content-type": "video/mp4"},
     )
 
-# ── Main ───────────────────────────────────────────────────────────────────────
+# Main
 
 def main():
     # Validate config
@@ -191,7 +191,7 @@ def main():
                 dt_str = ros_time_to_iso(timestamp)
                 ros_time = timestamp / 1e9
 
-                # ── Camera frames ──────────────────────────────────────────
+                # Camera frames
                 if topic == TOPIC_CAMERA:
                     raw = msg.data
                     arr = np.frombuffer(bytes(raw) if not isinstance(raw, (bytes, bytearray)) else raw, dtype=np.uint8)
@@ -207,7 +207,7 @@ def main():
                     video_writer.write(frame)
                     frame_count += 1
 
-                # ── Slow sensors (carry-forward state) ─────────────────────
+                # Slow sensors (carry-forward state) 
                 elif topic == TOPIC_PRESSURE:
                     state["pressure_pa"] = msg.fluid_pressure
 
@@ -236,7 +236,7 @@ def main():
                     state["mag_y"] = msg.magnetic_field.y
                     state["mag_z"] = msg.magnetic_field.z
 
-                # ── IMU — overwrite snapshot each message; last one is kept ─
+                # IMU — overwrite snapshot each message; last one is kept ─
                 elif topic == TOPIC_IMU:
                     sensor_snapshot = {
                         "dive_id":      dive_id,
@@ -255,7 +255,7 @@ def main():
                         **state,
                     }
 
-                # ── GPS — capture first fix only ───────────────────────────
+                # GPS — capture first fix only 
                 elif topic == TOPIC_GPS:
                     if gps_snapshot is None:
                         gps_snapshot = {
