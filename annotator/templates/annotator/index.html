@@ -21,7 +21,7 @@
     display: flex; align-items: center; gap: 16px;
     background: var(--bg-mid);
   }
-  .logo { font-family: var(--sans); font-size: 22px; font-weight: 800; }
+  .logo { font-family: var(--sans); font-size: 22px; font-weight: 800; text-decoration: none; color: var(--text); cursor: pointer; }
   .logo .a { color: var(--accent); }
   .subtitle { color: var(--text-muted); font-size: 11px; flex: 1; }
 
@@ -99,7 +99,7 @@
 <body>
 
 <div class="header">
-  <div class="logo"><span class="a">A</span><span class="s">S</span></div>
+  <a class="logo" href="{% url 'annotator:index' %}"><span class="a">A</span><span class="s">S</span></a>
   <div class="subtitle">Marine Image Annotator — Aquatic Sciences</div>
 </div>
 
@@ -119,7 +119,7 @@
     <div class="image-card-body">
       <div class="image-card-name">{{ img.original_filename }}</div>
       <div class="image-card-meta">
-        <span>{{ img.boxes.count }} box{{ img.boxes.count|pluralize:"es" }}</span>
+        <span>{{ img.box_count }} box{{ img.box_count|pluralize:"es" }}</span>
         <span class="status-chip status-{{ img.status }}">{{ img.get_status_display }}</span>
       </div>
     </div>

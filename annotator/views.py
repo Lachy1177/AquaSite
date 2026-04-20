@@ -1,5 +1,6 @@
 import json
 import uuid
+from django.db.models import Count
 from django.shortcuts import render, get_object_or_404, redirect
 from django.http import JsonResponse
 from django.views.decorators.http import require_POST, require_http_methods
@@ -17,7 +18,7 @@ from .models import AnalysisImage, BoundingBox, TaxonomyLabel, UserProfile
 
 @login_required
 def index(request):
-    images = AnalysisImage.objects.all().order_by("-uploaded_at")
+    images = AnalysisImage.objects.annotate(box_count=Count('boxes')).order_by("-uploaded_at")
     return render(request, "annotator/index.html", {"images": images})
 
 @login_required

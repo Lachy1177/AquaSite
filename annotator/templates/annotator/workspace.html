@@ -69,6 +69,9 @@
     display: flex;
     align-items: baseline;
     gap: 1px;
+    text-decoration: none;
+    color: var(--text);
+    cursor: pointer;
   }
   .logo span.a { color: var(--accent); }
   .logo span.s { color: var(--text); }
@@ -541,7 +544,7 @@
 
 <!-- ── TITLE BAR ─────────────────────────────────────────────────── -->
 <div class="title-bar">
-  <div class="logo"><span class="a">A</span><span class="s">S</span></div>
+  <a class="logo" href="{% url 'annotator:index' %}"><span class="a">A</span><span class="s">S</span></a>
   <div class="title-filename">{{ image.original_filename }}</div>
   <span class="title-status status-{{ image.status }}">{{ image.get_status_display }}</span>
   <button class="export-btn" onclick="exportData()">Export JSON</button>
