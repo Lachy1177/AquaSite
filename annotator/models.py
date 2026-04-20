@@ -63,7 +63,6 @@ class BoundingBox(models.Model):
     height = models.FloatField(help_text="Height as % of image height")
     source = models.CharField(max_length=16, choices=SOURCE_CHOICES, default="dino")
     confidence = models.FloatField(null=True, blank=True, help_text="Model confidence 0–1")
-    is_deleted = models.BooleanField(default=False, help_text="Soft-delete during bounding phase")
     created_by = models.ForeignKey(User, on_delete=models.SET_NULL, null=True, related_name="created_boxes")
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
@@ -105,7 +104,6 @@ class BoundingBox(models.Model):
             "height": self.height,
             "source": self.source,
             "confidence": self.confidence,
-            "is_deleted": self.is_deleted,
             "taxonomy_label": self.taxonomy_label.name if self.taxonomy_label else None,
             "taxonomy_category": self.taxonomy_label.category if self.taxonomy_label else None,
             "ai_suggested_label": self.ai_suggested_label,

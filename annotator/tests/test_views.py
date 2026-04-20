@@ -77,5 +77,4 @@ class BoundingBoxTests(TestCase):
         url = reverse("annotator:api_box_detail", args=[self.image.id, box.id])
         response = self.client.delete(url)
         self.assertEqual(response.status_code, 200)
-        box.refresh_from_db()
-        self.assertTrue(box.is_deleted)
+        self.assertFalse(BoundingBox.objects.filter(pk=box.id).exists())

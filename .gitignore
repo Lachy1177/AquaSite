@@ -3,7 +3,7 @@
 venv/
 
 # Database **to ignore at a later date**
-# db.sqlite3
+db.sqlite3
 
 # Python cache
 __pycache__/

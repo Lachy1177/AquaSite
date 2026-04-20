@@ -820,10 +820,6 @@ function renderAllBoxes() {
   document.querySelectorAll(".bbox").forEach(el => el.remove());
 
   for (const b of boxes) {
-    if (b.is_deleted && ACTIVE_TAB === "bound") {
-      // Show deleted in bound tab as red
-    }
-    if (b.is_deleted && ACTIVE_TAB !== "bound") continue;
     renderBox(b);
   }
 }
@@ -831,8 +827,7 @@ function renderAllBoxes() {
 function renderBox(b) {
   const layer = document.getElementById("box-layer");
   const el = document.createElement("div");
-  el.className = "bbox" + (b.id === selectedId ? " selected" : "") +
-                 (b.is_deleted ? " deleted" : "");
+  el.className = "bbox" + (b.id === selectedId ? " selected" : "");
   el.dataset.id = b.id;
   el.dataset.category = b.taxonomy_category || "";
 
@@ -865,7 +860,7 @@ function renderBox(b) {
   }
 
   // Resize handles (bound tab only)
-  if (ACTIVE_TAB === "bound" && !b.is_deleted) {
+  if (ACTIVE_TAB === "bound") {
     for (const cls of ["rh-nw","rh-ne","rh-sw","rh-se"]) {
       const rh = document.createElement("div");
       rh.className = `resize-handle ${cls}`;
@@ -1108,7 +1103,7 @@ async function createBox(x, y, w, h) {
 async function deleteBox(id) {
   await api(`boxes/${id}/`, "DELETE");
   const b = boxes.find(x => x.id === id);
-  if (b) b.is_deleted = true;
+  boxes = boxes.filter(x => x.id !== id);
   renderAllBoxes();
   renderBoxLists();
   updateCounts();
@@ -1163,7 +1158,7 @@ function setupKeyboard() {
 
 // ── BOX LISTS (left panel) ─────────────────────────────────────────
 function renderBoxLists() {
-  const active = boxes.filter(b => !b.is_deleted);
+  const active = boxes;
 
   // Bound
   const bl = document.getElementById("box-list-left");
@@ -1202,7 +1197,7 @@ function highlightListItem(id) {
 }
 
 function updateCounts() {
-  const n = boxes.filter(b => !b.is_deleted).length;
+  const n = boxes.length;
   document.querySelectorAll("#box-count,#classify-box-count,#specify-box-count")
     .forEach(el => el.textContent = n);
 }

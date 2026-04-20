@@ -15,7 +15,7 @@ class BoundingBoxInline(admin.TabularInline):
     readonly_fields = ["id", "source", "confidence", "created_at", "updated_at"]
     fields = [
         "id", "x", "y", "width", "height", "source", "confidence",
-        "taxonomy_label", "species_name", "is_finalized", "is_deleted",
+        "taxonomy_label", "species_name", "is_finalized",
     ]
 
 
@@ -31,9 +31,9 @@ class AnalysisImageAdmin(admin.ModelAdmin):
 class BoundingBoxAdmin(admin.ModelAdmin):
     list_display = [
         "id", "image", "source", "confidence",
-        "taxonomy_label", "is_finalized", "is_deleted",
+        "taxonomy_label", "is_finalized",
     ]
-    list_filter = ["source", "is_finalized", "is_deleted", "taxonomy_label__category"]
+    list_filter = ["source", "is_finalized", "taxonomy_label__category"]
     search_fields = ["image__original_filename", "species_name"]
 
 
