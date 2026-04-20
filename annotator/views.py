@@ -66,36 +66,13 @@ def workspace(request, image_id, tab="bound"):
 # API: bounding boxes
 # ---------------------------------------------------------------------------
 
-# def api_boxes(request, image_id):
-#     """GET: list boxes. POST: create box."""
-#     image = get_object_or_404(AnalysisImage, pk=image_id)
-
-#     if request.method == "GET":
-#         boxes = image.boxes.filter(is_deleted=False)
-#         return JsonResponse({"boxes": [b.to_dict() for b in boxes]})
-
-#     if request.method == "POST":
-#         data = json.loads(request.body)
-#         box = BoundingBox.objects.create(
-#             image=image,
-#             x=data["x"],
-#             y=data["y"],
-#             width=data["width"],
-#             height=data["height"],
-#             source="manual",
-#             created_by=request.user if request.user.is_authenticated else None,
-#         )
-#         return JsonResponse(box.to_dict(), status=201)
-
-#     return JsonResponse({"error": "Method not allowed"}, status=405)
-
 def api_boxes(request, image_id):
     """GET: list boxes. POST: create box."""
     image = get_object_or_404(AnalysisImage, pk=image_id)
     role = get_user_role(request.user)
 
     if request.method == "GET":
-        boxes = image.boxes.filter(is_deleted=False)
+        boxes = image.boxes.all()
         return JsonResponse({"boxes": [b.to_dict() for b in boxes]})
 
     if request.method == "POST":
@@ -118,7 +95,7 @@ def api_boxes(request, image_id):
 
 
 def api_box_detail(request, image_id, box_id):
-    """PATCH: update a box. DELETE: soft-delete."""
+    """PATCH: update a box. DELETE: hard-delete."""
     image = get_object_or_404(AnalysisImage, pk=image_id)
     box = get_object_or_404(BoundingBox, pk=box_id, image=image)
     role = get_user_role(request.user)
@@ -137,8 +114,7 @@ def api_box_detail(request, image_id, box_id):
         return JsonResponse(box.to_dict())
 
     if request.method == "DELETE":
-        box.is_deleted = True
-        box.save()
+        box.delete()
         return JsonResponse({"deleted": str(box_id)})
 
     return JsonResponse({"error": "Method not allowed"}, status=405)
@@ -286,7 +262,7 @@ def api_export(request, image_id):
     if role not in ["annotator", "admin"]:
         return JsonResponse({"error": "Permission denied"}, status=403)
     image = get_object_or_404(AnalysisImage, pk=image_id)
-    boxes = image.boxes.filter(is_deleted=False)
+    boxes = image.boxes.all()
     payload = {
         "image_id": str(image.id),
         "image_filename": image.original_filename,
