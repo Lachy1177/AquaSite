@@ -726,7 +726,7 @@
 <script>
 const IMAGE_ID   = "{{ image.id }}";
 const ACTIVE_TAB = "{{ active_tab }}";
-const TAXONOMY   = {{ taxonomy_json|safe }};
+const TAXONOMY   = JSON.parse("{{ taxonomy_json|safe }}");
 const CSRF       = "{{ csrf_token }}";
 
 // ── STATE ──────────────────────────────────────────────────────────
