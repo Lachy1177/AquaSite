@@ -66,7 +66,7 @@ def workspace(request, image_id, tab="bound"):
 # ---------------------------------------------------------------------------
 # API: bounding boxes
 # ---------------------------------------------------------------------------
-
+@login_required
 def api_boxes(request, image_id):
     """GET: list boxes. POST: create box."""
     image = get_object_or_404(AnalysisImage, pk=image_id)
@@ -94,7 +94,7 @@ def api_boxes(request, image_id):
 
     return JsonResponse({"error": "Method not allowed"}, status=405)
 
-
+@login_required
 def api_box_detail(request, image_id, box_id):
     """PATCH: update a box. DELETE: hard-delete."""
     image = get_object_or_404(AnalysisImage, pk=image_id)
@@ -253,7 +253,7 @@ def api_specify_box(request, image_id, box_id):
 # ---------------------------------------------------------------------------
 # API: export finalised boxes for an image
 # ---------------------------------------------------------------------------
-
+@login_required
 def api_export(request, image_id):
     """
     Returns all finalised bounding boxes as JSON.
@@ -282,6 +282,7 @@ def api_export(request, image_id):
 # ---------------------------------------------------------------------------
 #  Admin Dashboard
 # ---------------------------------------------------------------------------
+@login_required
 def admin_dashboard(request):
     role = get_user_role(request.user)
     if role != "admin":
@@ -296,3 +297,60 @@ def get_user_role(user):
         return user.userprofile.role
     except UserProfile.DoesNotExist:
         return None
+
+@login_required
+@require_POST
+def import_from_supabase(request):
+    from supabase import create_client
+    from django.conf import settings as cfg
+
+    sb     = create_client(cfg.SUPABASE_URL, cfg.SUPABASE_KEY)
+    bucket = "dive-videos"
+    folder = "analysis_images"
+
+    # Fetch all existing URLs so we can skip duplicates
+    existing_urls = set(AnalysisImage.objects.values_list("image_url", flat=True))
+
+    imported = 0
+    skipped  = 0
+    offset   = 0
+    limit    = 100  # Supabase max per page
+
+    while True:
+        try:
+            items = sb.storage.from_(bucket).list(folder, {
+                "limit":  limit,
+                "offset": offset,
+            })
+        except Exception as e:
+            return JsonResponse({"error": str(e)}, status=500)
+
+        if not items:
+            break  # no more results
+
+        for item in items:
+            name = item.get("name", "")
+            if not name.lower().endswith((".jpg", ".jpeg", ".png", ".tiff", ".tif")):
+                continue
+
+            storage_path = f"{folder}/{name}"
+            public_url   = f"{cfg.SUPABASE_URL}/storage/v1/object/public/{bucket}/{storage_path}"
+
+            if public_url in existing_urls:
+                skipped += 1
+                continue
+
+            AnalysisImage.objects.create(
+                image_url=public_url,
+                original_filename=name,
+                uploaded_by=request.user,
+                status="bound",
+            )
+            existing_urls.add(public_url)
+            imported += 1
+
+        if len(items) < limit:
+            break  # last page
+        offset += limit
+
+    return JsonResponse({"imported": imported, "skipped": skipped})
