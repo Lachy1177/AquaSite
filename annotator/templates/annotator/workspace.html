@@ -577,13 +577,6 @@
       <div class="panel-label">Boxes <span class="panel-label-count" id="box-count">0</span></div>
       <div class="box-list" id="box-list-left"></div>
     </div>
-    <div class="panel-section tab-panel-bound">
-      <div class="panel-label">Detection</div>
-      <button class="dino-btn w100" id="dino-btn" onclick="runDino()">
-        ▶ Run DINOv3 Detection
-      </button>
-    </div>
-
     <!-- CLASSIFY: category filters -->
     <div class="panel-section tab-panel-classify hidden">
       <div class="panel-label">Filter by Category</div>
@@ -649,6 +642,11 @@
           <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5">
             <path d="M3 2l10 6-5.5 1.5L6 14z"/>
           </svg>
+        </button>
+        <div class="tool-sep"></div>
+        <button class="dino-btn" id="suggest-all-btn" onclick="suggestAll()"
+                title="Run DINOv3 on every unclassified box">
+          ▶ Classify all unclassified
         </button>
         <div class="tool-sep"></div>
         <span class="tool-label">Click a box to classify it →</span>
@@ -1119,21 +1117,41 @@ function deleteSelected() {
   if (selectedId) deleteBox(selectedId);
 }
 
-// ── DINO DETECTION ─────────────────────────────────────────────────
-async function runDino() {
-  const btn = document.getElementById("dino-btn");
+// ── DINO CLASSIFICATION (batch) ────────────────────────────────────
+// Per-box suggestions live in showClassifyPanel() below — this is the
+// "classify every unlabelled box on the frame" button.
+async function suggestAll() {
+  const btn = document.getElementById("suggest-all-btn");
+  if (!btn) return;
   btn.classList.add("loading");
-  btn.textContent = "Running…";
+  const orig = btn.textContent;
+  btn.textContent = "Classifying…";
   try {
-    const data = await api("dino/", "POST");
-    for (const b of data.boxes) boxes.push(b);
+    const data = await api("suggest-all/", "POST");
+    if (data.error) {
+      toast(data.error);
+      return;
+    }
+    const suggestions = data.suggestions || [];
+    // Write suggestions onto existing boxes as ai_suggested_label (no DB write).
+    for (const s of suggestions) {
+      const b = boxes.find(x => x.id === s.box_id);
+      if (!b) continue;
+      b.ai_suggested_label = s.label;
+      b.ai_suggestion_confidence = s.confidence;
+      b._top_k = s.top_k;
+    }
     renderAllBoxes();
     renderBoxLists();
-    updateCounts();
-    toast(`DINOv3: ${data.boxes.length} boxes detected`);
+    // If one is currently selected, refresh its suggestion card.
+    if (selectedId) {
+      const b = boxes.find(x => x.id === selectedId);
+      if (b) renderSuggestionCard(b, { label: b.ai_suggested_label, confidence: b.ai_suggestion_confidence, top_k: b._top_k });
+    }
+    toast(`Classified ${suggestions.length} box${suggestions.length === 1 ? '' : 'es'}`);
   } finally {
     btn.classList.remove("loading");
-    btn.textContent = "▶ Run DINOv3 Detection";
+    btn.textContent = orig;
   }
 }
 
@@ -1228,32 +1246,64 @@ function buildCatFilters() {
 }
 
 async function showClassifyPanel(b) {
-  // AI suggestion
   const card = document.getElementById("ai-suggestion-card");
-  card.innerHTML = `<div class="ai-card">
-    <div class="ai-card-header">
-      <svg width="10" height="10" viewBox="0 0 16 16" fill="var(--accent)"><circle cx="8" cy="8" r="6"/></svg>
-      Loading AI suggestion…
-    </div></div>`;
-
-  const res = await api(`boxes/${b.id}/ai-suggest/`, "POST");
-  card.innerHTML = `<div class="ai-card">
-    <div class="ai-card-header">
-      <svg width="10" height="10" viewBox="0 0 16 16" fill="var(--accent)"><circle cx="8" cy="8" r="6"/></svg>
-      Claude suggests
-    </div>
-    <div class="ai-suggestion">${res.suggestion}</div>
-    <div class="ai-conf-bar"><div class="ai-conf-fill" style="width:${Math.round(res.confidence*100)}%"></div></div>
-    <div style="font-size:9px;color:var(--text-muted);margin-top:4px">${Math.round(res.confidence*100)}% confidence</div>
-  </div>
-  <button class="spec-save-btn" style="margin-top:4px;font-size:10px"
-    onclick="applySuggestion('${res.suggestion}')">Apply Suggestion</button>`;
-
-  // Reload latest box
-  const fresh = await api("boxes/");
-  boxes = fresh.boxes;
-  // highlight applied label
+  // If we already have a cached suggestion from suggestAll(), show it first.
+  if (b._top_k && b._top_k.length) {
+    renderSuggestionCard(b, { label: b.ai_suggested_label, confidence: b.ai_suggestion_confidence, top_k: b._top_k });
+  } else {
+    card.innerHTML = `<div class="ai-card">
+      <div class="ai-card-header">
+        <svg width="10" height="10" viewBox="0 0 16 16" fill="var(--accent)"><circle cx="8" cy="8" r="6"/></svg>
+        Running DINOv3 on this box…
+      </div></div>
+      <button class="dino-btn w100" disabled style="margin-top:6px">Suggest</button>`;
+  }
   refreshTaxHighlight(b);
+
+  // Fetch a fresh suggestion for this box.
+  try {
+    const res = await api(`boxes/${b.id}/suggest/`, "POST");
+    if (res.error) {
+      card.innerHTML = `<div style="color:var(--amber);font-size:10px">${res.error}</div>
+        <button class="dino-btn w100" style="margin-top:6px" onclick="showClassifyPanel(boxes.find(x=>x.id==='${b.id}'))">Retry</button>`;
+      return;
+    }
+    b.ai_suggested_label = res.label;
+    b.ai_suggestion_confidence = res.confidence;
+    b._top_k = res.top_k;
+    renderSuggestionCard(b, res);
+  } catch (e) {
+    card.innerHTML = `<div style="color:var(--red);font-size:10px">Suggest failed: ${e.message || e}</div>`;
+  }
+}
+
+function renderSuggestionCard(b, res) {
+  const card = document.getElementById("ai-suggestion-card");
+  if (!card || !res || !res.top_k) return;
+  const rows = res.top_k.map((t, i) => {
+    const pct = Math.round(t.confidence * 100);
+    const isTop = i === 0;
+    return `<div class="tax-item ${isTop ? 'applied' : ''}"
+                 onclick="applySuggestion('${escapeAttr(t.label)}')"
+                 title="Apply this label">
+      <span style="flex:1">${t.label}</span>
+      <span style="font-size:9px;color:var(--text-muted)">${pct}%</span>
+    </div>`;
+  }).join("");
+  card.innerHTML = `<div class="ai-card">
+    <div class="ai-card-header">
+      <svg width="10" height="10" viewBox="0 0 16 16" fill="var(--accent)"><circle cx="8" cy="8" r="6"/></svg>
+      DINOv3 top-${res.top_k.length}
+    </div>
+    <div class="ai-suggestion">${res.label || '—'}</div>
+    <div class="ai-conf-bar"><div class="ai-conf-fill" style="width:${Math.round((res.confidence||0)*100)}%"></div></div>
+    <div style="font-size:9px;color:var(--text-muted);margin-top:4px">${Math.round((res.confidence||0)*100)}% confidence</div>
+  </div>
+  <div class="tax-grid" style="margin-top:6px">${rows}</div>`;
+}
+
+function escapeAttr(s) {
+  return String(s).replace(/'/g, "\\'").replace(/"/g, '&quot;');
 }
 
 function refreshTaxHighlight(b) {

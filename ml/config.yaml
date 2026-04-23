@@ -1,0 +1,44 @@
+# AquaSite ML Pipeline Configuration
+# Toggle data_source between "local" and "supabase"
+
+data_source: "supabase"
+
+local:
+  image_dirs:
+    - "C:/Users/lmcka/OneDrive/Desktop/deco/images"
+  metadata_csv: "C:/Users/lmcka/OneDrive/Desktop/deco/metadata.csv"
+  labels_csv: null  # Optional: path to CSV with filename,label columns
+
+supabase:
+  use_django_media: true  # true = read from MEDIA_ROOT on disk; false = download from storage
+  download_to: "./ml/outputs/supabase_cache"
+
+model:
+  name: "facebook/dinov3-vitb16-pretrain-lvd1689m"
+  input_size: 224
+  freeze_backbone: true
+  embedding_dim: 768
+
+training:
+  batch_size: 32
+  num_workers: 4
+  learning_rate: 0.001
+  epochs: 20
+  device: "auto"  # "auto" | "cuda" | "cpu"
+  checkpoint_dir: "./ml/outputs/checkpoints"
+  log_dir: "./ml/outputs/logs"
+  # "image" = train on whole frames with majority-vote labels (lossy, small dataset)
+  # "box"   = train on per-box crops with precise labels (preferred)
+  sample_mode: "box"
+  min_box_fraction: 0.005  # box mode: skip boxes below 0.5% of image area
+
+embedding:
+  output_dir: "./ml/outputs/embeddings"
+  batch_size: 64
+
+classifier:
+  # "linear" = LayerNorm -> Linear(768, num_classes) — strong baseline
+  # "mlp"    = LayerNorm -> Linear -> GELU -> Dropout -> ... -> Linear(num_classes)
+  type: "mlp"
+  hidden_dims: [512, 256]
+  dropout: 0.3
