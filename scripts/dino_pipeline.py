@@ -1,283 +1,255 @@
 #!/usr/bin/env python3
 """
-dino_pipeline.py — Script 2 of 2
+dino_pipeline.py — DINOv3 frame curation
 
-What this script does:
-  Reads the JPG frames saved by extract_frames.py, runs each one
-  through DINOv3 on your GPU to get an embedding (fingerprint),
-  clusters similar frames together using K-Means, picks the most
-  representative frame from each cluster, then depending on the
-  mode selected:
-    --mode db        → upload to Supabase Storage only
-    --mode annotator → save to Django database only (appears in workspace)
-    --mode both      → upload to Supabase AND save to database (default)
+Reads the JPGs saved by extract_frames.py into extracted_frames/,
+computes DINOv3 embeddings (768-dim) via the frozen backbone shared
+with the rest of the ml/ pipeline, K-means clusters similar frames,
+picks the most representative frame per cluster, and depending on
+--mode:
+  --mode db        → upload selected frames to Supabase Storage only
+  --mode annotator → create AnalysisImage rows only (assumes files are
+                     already uploaded — useful for re-stamping clusters)
+  --mode both      → upload AND create DB rows (default)
 
-  Run extract_frames.py FIRST, then run this script second.
-S
+Uses the same DINOv3 backbone, eval transform, and device config as
+`python -m ml.run embed`, so the embeddings here share a feature space
+with the rest of the pipeline. Selected frames are stamped with their
+cluster_id on the AnalysisImage row, so no separate `assign_clusters`
+pass is required for curated frames.
+
+Run extract_frames.py FIRST, then this script.
+
 Usage:
-  python scripts/dino_pipeline.py                         (default: both)
+  python scripts/dino_pipeline.py                    (default: both)
   python scripts/dino_pipeline.py --mode db
-  python scripts/dino_pipeline.py --mode annotatorS
+  python scripts/dino_pipeline.py --mode annotator
+  python scripts/dino_pipeline.py --n-clusters 100
+  python scripts/dino_pipeline.py --keep-unchosen
 """
 
+import argparse
+import mimetypes
 import os
 import sys
 import uuid
-import glob
-import argparse
+from pathlib import Path
 
-# ── Locate project root and load .env ─────────────────────────────────────────
-SCRIPT_DIR   = os.path.dirname(os.path.abspath(__file__))
-PROJECT_ROOT = os.path.dirname(SCRIPT_DIR)
+SCRIPT_DIR = Path(__file__).resolve().parent
+PROJECT_ROOT = SCRIPT_DIR.parent
 
-def load_env(path):
-    if not os.path.exists(path):
-        print(f"ERROR: .env file not found at {path}")
-        sys.exit(1)
-    with open(path) as f:
-        for line in f:
-            line = line.strip()
-            if not line or line.startswith("#") or "=" not in line:
-                continue
-            key, _, val = line.partition("=")
-            os.environ.setdefault(key.strip(), val.strip())
+sys.path.insert(0, str(PROJECT_ROOT))
 
-load_env(os.path.join(PROJECT_ROOT, ".env"))
+os.environ.setdefault("DJANGO_SETTINGS_MODULE", "AquaSightWeb.settings")
+import django
+django.setup()
 
-# ── Configuration ──────────────────────────────────────────────────────────────
-
-SUPABASE_URL   = os.environ.get("SUPABASE_URL", "")
-SUPABASE_KEY   = os.environ.get("SUPABASE_KEY", "")
-STORAGE_BUCKET = os.environ.get("SUPABASE_STORAGE_BUCKET", "dive-videos")
-
-# Folder where extract_frames.py saved the JPGs
-FRAMES_DIR = os.path.join(PROJECT_ROOT, "extracted_frames")
-
-# Default number of diverse frames to select
-DEFAULT_CLUSTERS = 200
-
-# ── Parse arguments ────────────────────────────────────────────────────────────
+from django.conf import settings
 
 parser = argparse.ArgumentParser(
-    description="DINO classify and upload frames"
+    description="DINOv3 embed + cluster + curate frames from extracted_frames/",
+    formatter_class=argparse.RawDescriptionHelpFormatter,
 )
 parser.add_argument(
     "--mode",
     choices=["db", "annotator", "both"],
     default="both",
-    help=(
-        "db        = upload to Supabase Storage only\n"
-        "annotator = save to Django database only (appears in annotation workspace)\n"
-        "both      = upload to Supabase AND save to database (default)"
-    )
-   
+    help="db=upload only, annotator=DB rows only, both=upload and DB rows",
+)
+parser.add_argument(
+    "--n-clusters",
+    type=int,
+    default=200,
+    help="Number of K-means clusters / selected frames (default: 200)",
+)
+parser.add_argument(
+    "--frames-dir",
+    type=str,
+    default=str(PROJECT_ROOT / "extracted_frames"),
+    help="Directory where extract_frames.py saved the JPGs",
+)
+parser.add_argument(
+    "--keep-unchosen",
+    action="store_true",
+    help="Keep non-selected frames in extracted_frames/ (default: delete)",
 )
 args = parser.parse_args()
 
-
-# ── Load dependencies ──────────────────────────────────────────────────────────
-
 print("Loading dependencies...")
-import cv2
 import numpy as np
 import torch
-from torchvision import transforms
 from PIL import Image
 from sklearn.cluster import KMeans
+from sklearn.preprocessing import normalize
+
+from annotator.models import AnalysisImage
+from ml.data.config import load_config
+from ml.data.transforms import get_eval_transform
+from ml.models.backbone import DINOv3Backbone
+
+config = load_config()
+device = config.training.device
 
 print(f"  PyTorch  : {torch.__version__}")
-print(f"  CUDA     : {torch.cuda.is_available()}")
-if torch.cuda.is_available():
+print(f"  Device   : {device}")
+if device == "cuda" and torch.cuda.is_available():
     print(f"  GPU      : {torch.cuda.get_device_name(0)}")
+print(f"  Backbone : {config.model.name}")
 print(f"  Mode     : {args.mode}")
+print(f"  Clusters : {args.n_clusters}")
 
-DEVICE = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
-# ── Load DINOv3 ────────────────────────────────────────────────────────────────
+def resolve_bucket() -> str:
+    bucket = settings.SUPABASE_IMAGES_BUCKET
+    if not bucket:
+        raise RuntimeError(
+            "SUPABASE_IMAGES_BUCKET is not set in .env. The annotator UI "
+            "reads images from this bucket via AnalysisImage.image_url, so "
+            "curated frames must land in the same place."
+        )
+    return bucket
 
-print("\nLoading DINOv3 model...")
-model = torch.hub.load("facebookresearch/dinov2", "dinov2_vits14")
-model.eval()
-model.to(DEVICE)
-print(f"  Model ready on {DEVICE}")
 
-# Preprocessing pipeline for DINO
-transform = transforms.Compose([
-    transforms.Resize(256),
-    transforms.CenterCrop(224),
-    transforms.ToTensor(),
-    transforms.Normalize(
-        mean=[0.485, 0.456, 0.406],
-        std=[0.229, 0.224, 0.225]
-    ),
-])
+def supabase_public_url(bucket: str, storage_path: str) -> str:
+    return f"{settings.SUPABASE_URL}/storage/v1/object/public/{bucket}/{storage_path}"
 
-# ── Helper functions ───────────────────────────────────────────────────────────
 
-def get_embedding(img_path):
-    """
-    Load a JPG from disk, run it through DINO, return its
-    embedding - a list of 384 numbers describing the image.
-    Returns None if the image cannot be read.
-    """
-    img_bgr = cv2.imread(img_path)
-    if img_bgr is None:
+def embed_frame(backbone: DINOv3Backbone, transform, img_path: str):
+    """Return a (768,) numpy vector, or None if the image can't be opened."""
+    try:
+        img = Image.open(img_path).convert("RGB")
+    except Exception as e:
+        print(f"  WARNING: could not open {img_path}: {e}")
         return None
-    img_rgb = cv2.cvtColor(img_bgr, cv2.COLOR_BGR2RGB)
-    pil_img = Image.fromarray(img_rgb)
-    tensor  = transform(pil_img).unsqueeze(0).to(DEVICE)
+    tensor = transform(img).unsqueeze(0)
     with torch.no_grad():
-        embedding = model(tensor)
-    return embedding.cpu().numpy().flatten()
+        emb = backbone.extract(tensor)
+    return emb[0].cpu().numpy()
 
 
-def upload_frame(sb, img_path, filename):
-    """
-    Read a JPG from disk and upload it to Supabase Storage
-    under the analysis_images/ folder.
-    Returns the storage path.
-    """
+def upload_frame(sb, bucket: str, img_path: str, storage_path: str) -> None:
     with open(img_path, "rb") as f:
-        img_bytes = f.read()
-    storage_path = f"analysis_images/{filename}"
-    sb.storage.from_(STORAGE_BUCKET).upload(
+        data = f.read()
+    content_type, _ = mimetypes.guess_type(img_path)
+    content_type = content_type or "image/jpeg"
+    sb.storage.from_(bucket).upload(
         storage_path,
-        img_bytes,
-        file_options={"content-type": "image/jpeg"},
+        data,
+        file_options={"content-type": content_type},
     )
-    return storage_path
 
-
-# ── Main ───────────────────────────────────────────────────────────────────────
 
 def main():
-    if not SUPABASE_URL or not SUPABASE_KEY:
-        print("ERROR: SUPABASE_URL and SUPABASE_KEY must be set in .env")
+    frames_dir = Path(args.frames_dir)
+    if not frames_dir.exists():
+        print(f"ERROR: frames directory not found: {frames_dir}")
+        print("Run extract_frames.py first.")
         sys.exit(1)
 
-    if not os.path.exists(FRAMES_DIR):
-        print(f"ERROR: Frames folder not found at {FRAMES_DIR}")
-        print("Run extract_frames.py first!")
+    frame_paths = sorted(str(p) for p in frames_dir.glob("*.jpg"))
+    print(f"\nFound {len(frame_paths)} frames in {frames_dir}")
+    if not frame_paths:
+        print("No frames to process.")
         sys.exit(1)
 
-    # ── Step 1: Find all extracted frames ─────────────────────────────────────
-    print(f"\n── Step 1: Finding extracted frames in {FRAMES_DIR}...")
-    frame_paths = sorted(glob.glob(os.path.join(FRAMES_DIR, "*.jpg")))
-    print(f"  Found {len(frame_paths)} frames")
+    print(f"\nLoading DINOv3 backbone...")
+    backbone = DINOv3Backbone(
+        model_name=config.model.name,
+        device=device,
+        hf_token=config.hf_token,
+    )
+    transform = get_eval_transform(config.model.input_size)
 
-    if len(frame_paths) == 0:
-        print("No frames found! Run extract_frames.py first.")
-        sys.exit(1)
-
-    # ── Step 2: Run DINO on every frame ───────────────────────────────────────
-    print(f"\n── Step 2: Computing DINO embeddings on {DEVICE}...")
-    print(f"  This may take a few minutes...\n")
-
-    all_embeddings = []
-    valid_paths    = []
-
+    print(f"\nStep 1: Embedding {len(frame_paths)} frames...")
+    embeddings = []
+    valid_paths = []
     for i, path in enumerate(frame_paths):
-        emb = get_embedding(path)
+        emb = embed_frame(backbone, transform, path)
         if emb is not None:
-            all_embeddings.append(emb)
+            embeddings.append(emb)
             valid_paths.append(path)
-
         if (i + 1) % 50 == 0:
-            print(f"  Processed {i+1}/{len(frame_paths)} frames...")
+            print(f"  {i + 1}/{len(frame_paths)}")
+    print(f"  Done — {len(valid_paths)} valid frames")
 
-    print(f"  Done - {len(valid_paths)} valid frames embedded")
+    if not valid_paths:
+        print("ERROR: no frames embedded successfully.")
+        sys.exit(1)
 
-    # ── Step 3: Cluster similar frames together ────────────────────────────────
-    n_clusters = min(DEFAULT_CLUSTERS, len(valid_paths))
-    print(f"\n── Step 3: Clustering {len(valid_paths)} frames into {n_clusters} groups...")
+    matrix = np.stack(embeddings)
+    matrix_norm = normalize(matrix, norm="l2")
 
-    embeddings_matrix = np.stack(all_embeddings)
-    kmeans = KMeans(n_clusters=n_clusters, random_state=42, n_init="auto")
-    labels = kmeans.fit_predict(embeddings_matrix)
-    print(f"  Clustering complete")
+    n_clusters = min(args.n_clusters, len(valid_paths))
+    print(f"\nStep 2: K-means with {n_clusters} clusters...")
+    kmeans = KMeans(n_clusters=n_clusters, random_state=42, n_init=10)
+    labels = kmeans.fit_predict(matrix_norm)
+    print(f"  Done")
 
-    # ── Step 4: Pick best frame from each cluster ──────────────────────────────
-    print(f"\n── Step 4: Selecting most representative frame per group...")
-    selected_paths = []
-
-    for cluster_id in range(n_clusters):
-        cluster_indices = np.where(labels == cluster_id)[0]
-        if len(cluster_indices) == 0:
+    print(f"\nStep 3: Picking representative frame per cluster...")
+    selected = []
+    for cid in range(n_clusters):
+        member_idx = np.where(labels == cid)[0]
+        if len(member_idx) == 0:
             continue
-        centre          = kmeans.cluster_centers_[cluster_id]
-        distances       = [
-            np.linalg.norm(all_embeddings[j] - centre)
-            for j in cluster_indices
-        ]
-        best_global_idx = cluster_indices[np.argmin(distances)]
-        selected_paths.append(valid_paths[best_global_idx])
+        centre = kmeans.cluster_centers_[cid]
+        distances = np.linalg.norm(matrix_norm[member_idx] - centre, axis=1)
+        best = member_idx[int(np.argmin(distances))]
+        selected.append((valid_paths[best], cid))
+    print(f"  Selected {len(selected)} frames")
 
-    print(f"  Selected {len(selected_paths)} diverse frames")
+    print(f"\nStep 4: Mode '{args.mode}'...")
+    sb = None
+    bucket = None
+    if args.mode in ("db", "both"):
+        from supabase import create_client
+        bucket = resolve_bucket()
+        sb = create_client(settings.SUPABASE_URL, settings.SUPABASE_KEY)
+    elif args.mode == "annotator":
+        bucket = resolve_bucket()
 
-    # ── Step 5: Process frames based on mode ──────────────────────────────────
-    print(f"\n── Step 5: Processing frames in mode='{args.mode}'...")
-
-    from supabase import create_client
-    sb = create_client(SUPABASE_URL, SUPABASE_KEY)
-
-    # Set up Django ORM only if we need the database
-    if args.mode in ("annotator", "both"):
-        sys.path.insert(0, PROJECT_ROOT)
-        os.environ.setdefault("DJANGO_SETTINGS_MODULE", "AquaSightWeb.settings")
-        import django
-        django.setup()
-        from annotator.models import AnalysisImage
-
-    created_count = 0
-
-    for i, frame_path in enumerate(selected_paths):
-        filename     = f"frame_{uuid.uuid4().hex}.jpg"
+    created = 0
+    for i, (frame_path, cid) in enumerate(selected):
+        filename = f"frame_{uuid.uuid4().hex}.jpg"
         storage_path = f"analysis_images/{filename}"
 
-        # Upload to Supabase Storage
         if args.mode in ("db", "both"):
             try:
-                upload_frame(sb, frame_path, filename)
+                upload_frame(sb, bucket, frame_path, storage_path)
             except Exception as e:
-                print(f"  WARNING: Upload failed for {filename} - {e}")
+                print(f"  WARNING: upload failed for {filename}: {e}")
                 continue
 
-        # Save record to Django database (appears in annotation workspace)
         if args.mode in ("annotator", "both"):
+            image_url = supabase_public_url(bucket, storage_path)
             AnalysisImage.objects.create(
-                image=storage_path,
+                image_url=image_url,
                 original_filename=os.path.basename(frame_path),
                 status="bound",
+                cluster_id=cid,
             )
 
-        created_count += 1
-
+        created += 1
         if (i + 1) % 20 == 0:
-            print(f"  Processed {i+1}/{len(selected_paths)} frames...")
+            print(f"  {i + 1}/{len(selected)}")
 
-    # ── Step 6: Delete unchosen frames from extracted_frames/ ─────────────────
-    print(f"\n── Step 6: Cleaning up unchosen frames...")
-    deleted_count = 0
-    for path in valid_paths:
-        if path not in selected_paths:
-            try:
-                os.remove(path)
-                deleted_count += 1
-            except Exception as e:
-                print(f"  WARNING: Could not delete {path} - {e}")
-    print(f"  Deleted {deleted_count} unchosen frames")
-    print(f"  Kept    {len(selected_paths)} selected frames")
+    if not args.keep_unchosen:
+        print(f"\nStep 5: Cleaning up unchosen frames...")
+        selected_set = {p for p, _ in selected}
+        deleted = 0
+        for p in valid_paths:
+            if p not in selected_set:
+                try:
+                    os.remove(p)
+                    deleted += 1
+                except Exception as e:
+                    print(f"  WARNING: could not delete {p}: {e}")
+        print(f"  Deleted {deleted}, kept {len(selected)}")
 
-    # ── Done ──────────────────────────────────────────────────────────────────
-    print(f"\n✓ Pipeline complete!")
-    print(f"  Mode             : {args.mode}")
-    print(f"  Frames processed : {created_count}")
-
+    print(f"\nPipeline complete — {created} frames processed (mode={args.mode})")
     if args.mode in ("db", "both"):
-        print(f"  Uploaded to      : Supabase Storage / {STORAGE_BUCKET} / analysis_images/")
+        print(f"  Uploaded to : {bucket}/analysis_images/")
     if args.mode in ("annotator", "both"):
-        print(f"  Saved to         : Django database (annotator_analysisimage table)")
-        print(f"  Open             : http://127.0.0.1:8000/annotator/ to start annotating")
+        print(f"  DB rows     : annotator_analysisimage (cluster_id stamped)")
 
 
 if __name__ == "__main__":

@@ -19,7 +19,24 @@ from .models import AnalysisImage, BoundingBox, TaxonomyLabel, UserProfile
 @login_required
 def index(request):
     images = AnalysisImage.objects.annotate(box_count=Count('boxes')).order_by("-uploaded_at")
-    return render(request, "annotator/index.html", {"images": images})
+
+    cluster_id = request.GET.get("cluster")
+    if cluster_id is not None and cluster_id != "":
+        images = images.filter(cluster_id=int(cluster_id))
+
+    clusters = (
+        AnalysisImage.objects
+        .exclude(cluster_id__isnull=True)
+        .values_list("cluster_id", flat=True)
+        .distinct()
+        .order_by("cluster_id")
+    )
+
+    return render(request, "annotator/index.html", {
+        "images": images,
+        "clusters": list(clusters),
+        "active_cluster": cluster_id,
+    })
 
 @login_required
 @require_POST
@@ -162,55 +179,86 @@ def api_classify_box(request, image_id, box_id):
 
 
 # ---------------------------------------------------------------------------
-# API: DINOv3 auto-detect (stubbed)
+# API: DINOv3 per-box suggestion
 # ---------------------------------------------------------------------------
 
+def _fetch_frame_bytes(image):
+    """Download the full frame from Supabase storage. Returns (bytes, error_response)."""
+    from urllib.request import urlopen
+    from urllib.error import URLError
+    if not image.image_url:
+        return None, JsonResponse({"error": "Image has no image_url"}, status=400)
+    try:
+        with urlopen(image.image_url, timeout=15) as resp:
+            return resp.read(), None
+    except URLError as exc:
+        return None, JsonResponse({"error": f"Could not fetch image: {exc}"}, status=502)
+
+
+@login_required
 @require_POST
-def api_dino_detect(request, image_id):
-    """
-    Run DINOv3 on the image and return bounding boxes.
+def api_suggest_box(request, image_id, box_id):
+    """Classify a single box crop and return {label, confidence, top_k}. No DB write."""
+    role = get_user_role(request.user)
+    if role not in ["classifier", "annotator", "admin"]:
+        return JsonResponse({"error": "Permission denied"}, status=403)
 
-    REAL IMPLEMENTATION (uncomment when DINOv3 endpoint is available):
-    -----------------------------------------------------------------------
-    NOTE: images are now stored in Supabase Storage (image.image_url), not on
-    local disk. Fetch image bytes via requests.get(image.image_url).content
-    instead of opening image.image.path.
-    # import requests as req
-    # image = get_object_or_404(AnalysisImage, pk=image_id)
-    # DINO_ENDPOINT = "http://your-dino-service/detect"
-    # img_bytes = req.get(image.image_url).content
-    # resp = req.post(DINO_ENDPOINT, files={"image": img_bytes}, data={"threshold": 0.5})
-    # raw_boxes = resp.json()["boxes"]  # expects [{x,y,w,h,confidence}, ...] 
-    # created = []
-    # for rb in raw_boxes:
-    #     box = BoundingBox.objects.create(
-    #         image=image, x=rb["x"], y=rb["y"],
-    #         width=rb["w"], height=rb["h"],
-    #         source="dino", confidence=rb["confidence"]
-    #     )
-    #     created.append(box.to_dict())
-    # return JsonResponse({"boxes": created})
-    -----------------------------------------------------------------------
-    """
     image = get_object_or_404(AnalysisImage, pk=image_id)
+    box = get_object_or_404(BoundingBox, pk=box_id, image=image)
 
-    # STUB — generates plausible-looking boxes for UI development
-    import random
-    random.seed(str(image_id))
-    stub_boxes = []
-    for _ in range(random.randint(4, 8)):
-        x = random.uniform(5, 65)
-        y = random.uniform(5, 60)
-        w = random.uniform(8, 28)
-        h = random.uniform(8, 28)
-        box = BoundingBox.objects.create(
-            image=image, x=x, y=y, width=w, height=h,
-            source="dino", confidence=round(random.uniform(0.55, 0.95), 2),
-            created_by=None,
+    img_bytes, err = _fetch_frame_bytes(image)
+    if err is not None:
+        return err
+
+    try:
+        from ml.bridge import run_dino_inference_on_crop
+        result = run_dino_inference_on_crop(
+            img_bytes, (box.x, box.y, box.width, box.height)
         )
-        stub_boxes.append(box.to_dict())
+    except Exception as e:
+        return JsonResponse({"error": f"Inference failed: {e}"}, status=500)
 
-    return JsonResponse({"boxes": stub_boxes})
+    if result is None:
+        return JsonResponse({
+            "error": "No trained classifier found. Run `python -m ml.run train` first.",
+        }, status=503)
+
+    return JsonResponse({"box_id": str(box.id), **result})
+
+
+@login_required
+@require_POST
+def api_suggest_all(request, image_id):
+    """Batched classification for every unlabelled box on a frame."""
+    role = get_user_role(request.user)
+    if role not in ["classifier", "annotator", "admin"]:
+        return JsonResponse({"error": "Permission denied"}, status=403)
+
+    image = get_object_or_404(AnalysisImage, pk=image_id)
+    boxes = list(image.boxes.filter(taxonomy_label__isnull=True))
+    if not boxes:
+        return JsonResponse({"suggestions": [], "message": "No unclassified boxes"})
+
+    img_bytes, err = _fetch_frame_bytes(image)
+    if err is not None:
+        return err
+
+    try:
+        from ml.bridge import run_dino_inference_on_crops
+        crops = [(str(b.id), (b.x, b.y, b.width, b.height)) for b in boxes]
+        results = run_dino_inference_on_crops(img_bytes, crops)
+    except Exception as e:
+        return JsonResponse({"error": f"Inference failed: {e}"}, status=500)
+
+    if not results:
+        return JsonResponse({
+            "suggestions": [],
+            "error": "No trained classifier found.",
+        }, status=503)
+
+    return JsonResponse({
+        "suggestions": [{"box_id": bid, **r} for bid, r in results],
+    })
 
 
 # ---------------------------------------------------------------------------

@@ -38,6 +38,7 @@ class AnalysisImage(models.Model):
     uploaded_by = models.ForeignKey(User, on_delete=models.SET_NULL, null=True, related_name="uploaded_images")
     uploaded_at = models.DateTimeField(auto_now_add=True)
     status = models.CharField(max_length=16, choices=STATUS_CHOICES, default="bound")
+    cluster_id = models.IntegerField(null=True, blank=True, help_text="DINOv3 embedding cluster assignment")
     notes = models.TextField(blank=True)
 
     def __str__(self):

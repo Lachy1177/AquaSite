@@ -93,7 +93,22 @@
     text-transform: uppercase; letter-spacing: 1px;
     border-bottom: 1px solid var(--border);
     margin-bottom: 16px;
+    display: flex; align-items: center; justify-content: space-between;
   }
+  .cluster-bar {
+    max-width: 1200px; margin: 0 auto;
+    padding: 12px 32px;
+    display: flex; flex-wrap: wrap; gap: 6px; align-items: center;
+  }
+  .cluster-chip {
+    padding: 4px 12px; border-radius: 3px;
+    font-size: 11px; cursor: pointer;
+    background: var(--bg-panel); border: 1px solid var(--border);
+    color: var(--text-muted); text-decoration: none;
+    transition: all 0.15s;
+  }
+  .cluster-chip:hover { border-color: var(--accent); color: var(--text); }
+  .cluster-chip.active { background: var(--accent-dim); border-color: var(--accent); color: var(--accent); }
 </style>
 </head>
 <body>
@@ -110,8 +125,20 @@
   <div class="upload-btn">Choose File</div>
 </div>
 
+{% if clusters %}
+<div class="cluster-bar">
+  <span style="font-size:11px;color:var(--text-muted);margin-right:8px;">CLUSTERS:</span>
+  <a class="cluster-chip {% if not active_cluster %}active{% endif %}" href="?">All</a>
+  {% for c in clusters %}
+  <a class="cluster-chip {% if active_cluster == c|stringformat:'d' %}active{% endif %}" href="?cluster={{ c }}">{{ c }}</a>
+  {% endfor %}
+</div>
+{% endif %}
+
 {% if images %}
-<div class="section-title">Recent Images ({{ images.count }})</div>
+<div class="section-title">
+  <span>{% if active_cluster != None and active_cluster != "" %}Cluster {{ active_cluster }}{% else %}All Images{% endif %} ({{ images.count }})</span>
+</div>
 <div class="image-grid">
   {% for img in images %}
   <a class="image-card" href="{% url 'annotator:workspace' img.id img.status %}">
