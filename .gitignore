@@ -24,3 +24,6 @@ dino_pipeline.py
 
 # ML pipeline outputs
 ml/outputs/
+
+# Claude files
+claude.md
