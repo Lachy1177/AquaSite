@@ -14,5 +14,6 @@ urlpatterns = [
     path("api/<uuid:image_id>/boxes/<uuid:box_id>/classify/", views.api_classify_box, name="api_classify"),
     path("api/<uuid:image_id>/boxes/<uuid:box_id>/specify/", views.api_specify_box, name="api_specify"),
     path("api/<uuid:image_id>/export/", views.api_export, name="api_export"),
-    path("admin-dashboard/", views.admin_dashboard, name="admin_dashboard")
+    path("admin-dashboard/", views.admin_dashboard, name="admin_dashboard"),
+    path("import-supabase/", views.import_from_supabase, name="import_supabase"),
 ]

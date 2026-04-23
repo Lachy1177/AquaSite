@@ -116,6 +116,11 @@
 <div class="header">
   <a class="logo" href="{% url 'annotator:index' %}"><span class="a">A</span><span class="s">S</span></a>
   <div class="subtitle">Marine Image Annotator — Aquatic Sciences</div>
+  <button id="import-btn" onclick="importFromSupabase(event)"
+    style="margin-left:auto; background:#2a2a2a; color:#4a9eff; border:1px solid #4a9eff;
+           padding:6px 16px; border-radius:3px; font-family:var(--mono); font-size:11px; cursor:pointer;">
+    ↓ Import from Supabase
+  </button>
 </div>
 
 <div class="upload-area" onclick="document.getElementById('file-input').click()">
@@ -166,6 +171,33 @@ async function uploadFile(input) {
   const d = await r.json();
   if (d.redirect) window.location = d.redirect;
 }
+
+async function importFromSupabase() {
+   event.stopPropagation(); 
+  const btn = document.getElementById("import-btn");
+  btn.textContent = "Importing…";
+  btn.style.pointerEvents = "none";
+  btn.style.opacity = "0.6";
+
+  const r = await fetch("/annotator/import-supabase/", {
+    method: "POST",
+    headers: { "X-CSRFToken": "{{ csrf_token }}" },
+  });
+  const d = await r.json();
+
+  if (d.error) {
+    alert("Import failed: " + d.error);
+  } else {
+    alert(`Done! Imported: ${d.imported}, already existed: ${d.skipped}`);
+    window.location.reload();
+  }
+
+  btn.textContent = "↓ Import from Supabase";
+  btn.style.pointerEvents = "";
+  btn.style.opacity = "";
+}
 </script>
+</body>
+</html>
 </body>
 </html>
