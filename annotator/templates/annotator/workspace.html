@@ -277,6 +277,7 @@
   }
   .image-wrapper.tool-select { cursor: default; }
   .image-wrapper.tool-pan    { cursor: grab; }
+  .image-wrapper.readonly { cursor: default; }
 
   #main-image {
     display: block;
@@ -547,23 +548,35 @@
   <a class="logo" href="{% url 'annotator:index' %}"><span class="a">A</span><span class="s">S</span></a>
   <div class="title-filename">{{ image.original_filename }}</div>
   <span class="title-status status-{{ image.status }}">{{ image.get_status_display }}</span>
+  {% if role == "researcher" or role == "admin" %}
   <button class="export-btn" onclick="exportData()">Export JSON</button>
+  {% endif %}
 </div>
 
 <!-- ── TABS ───────────────────────────────────────────────────────── -->
 <div class="tabs">
+
+  {% if role == "annotator" or role == "admin" or role == "viewer" %}
   <a class="tab {% if active_tab == 'bound' %}active{% endif %}"
      href="{% url 'annotator:workspace' image.id 'bound' %}">
     <span class="tab-dot"></span>Bound
   </a>
+  {% endif %}
+
+  {% if role == "classifier" or role == "admin" %}
   <a class="tab {% if active_tab == 'classify' %}active{% endif %}"
      href="{% url 'annotator:workspace' image.id 'classify' %}">
     <span class="tab-dot"></span>Classify
   </a>
+  {% endif %}
+
+  {% if role == "researcher" or role == "admin" %}
   <a class="tab {% if active_tab == 'specify' %}active{% endif %}"
      href="{% url 'annotator:workspace' image.id 'specify' %}">
     <span class="tab-dot"></span>Specify
   </a>
+  {% endif %}
+
 </div>
 
 <!-- ── WORKSPACE ─────────────────────────────────────────────────── -->
@@ -606,7 +619,7 @@
     <div class="toolbar">
 
       <!-- BOUND tools -->
-      <div id="bound-tools" class="flex-row">
+      <div id="bound-tools" class="flex-row {% if role != 'annotator' and role != 'admin' %}hidden{% endif %}">
         <button class="tool-btn active" id="tool-select" title="Select (V)" onclick="setTool('select')">
           <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5">
             <path d="M3 2l10 6-5.5 1.5L6 14z"/>
@@ -637,7 +650,7 @@
       </div>
 
       <!-- CLASSIFY tools -->
-      <div id="classify-tools" class="flex-row hidden">
+      <div id="classify-tools" class="flex-row hidden {% if role != 'classifier' and role != 'admin' %}hidden{% endif %}">
         <button class="tool-btn active" title="Select box to classify" onclick="setTool('select')">
           <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5">
             <path d="M3 2l10 6-5.5 1.5L6 14z"/>
@@ -653,7 +666,7 @@
       </div>
 
       <!-- SPECIFY tools -->
-      <div id="specify-tools" class="flex-row hidden">
+      <div id="specify-tools" class="flex-row hidden {% if role != 'researcher' and role != 'admin' %}hidden{% endif %}">
         <button class="tool-btn active" title="Select">
           <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5">
             <path d="M3 2l10 6-5.5 1.5L6 14z"/>
@@ -726,6 +739,13 @@ const IMAGE_ID   = "{{ image.id }}";
 const ACTIVE_TAB = "{{ active_tab }}";
 const TAXONOMY   = {{ taxonomy_json|safe }};
 const CSRF       = "{{ csrf_token }}";
+const USER_ROLE  = "{{ role }}";
+
+const CAN_BOUND    = USER_ROLE === "annotator" || USER_ROLE === "admin";
+const CAN_CLASSIFY = USER_ROLE === "classifier" || USER_ROLE === "admin";
+const CAN_SPECIFY  = USER_ROLE === "researcher" || USER_ROLE === "admin";
+const CAN_EXPORT   = USER_ROLE === "researcher" || USER_ROLE === "admin";
+const IS_VIEWER    = USER_ROLE === "viewer";
 
 // ── STATE ──────────────────────────────────────────────────────────
 let boxes        = [];   // array of box dicts from server
@@ -768,6 +788,7 @@ function initAfterLoad() {
   imgNatW = img.naturalWidth;
   imgNatH = img.naturalHeight;
   updateImgDims();
+  if (!CAN_BOUND) document.getElementById("image-wrapper").classList.add("readonly");
   loadBoxes();
   buildTaxonomyUI();
   buildCatFilters();
@@ -789,9 +810,13 @@ function setupTabUI() {
   document.querySelectorAll(".tab-panel-specify").forEach(el =>
     el.classList.toggle("hidden", tab !== "specify"));
 
-  document.getElementById("bound-tools").classList.toggle("hidden",    tab !== "bound");
-  document.getElementById("classify-tools").classList.toggle("hidden", tab !== "classify");
-  document.getElementById("specify-tools").classList.toggle("hidden",  tab !== "specify");
+  const boundTools = document.getElementById("bound-tools");
+  const classifyTools = document.getElementById("classify-tools");
+  const specifyTools = document.getElementById("specify-tools");
+
+  if (boundTools) boundTools.classList.toggle("hidden", tab !== "bound" || !CAN_BOUND);
+  if (classifyTools) classifyTools.classList.toggle("hidden", tab !== "classify" || !CAN_CLASSIFY);
+  if (specifyTools) specifyTools.classList.toggle("hidden", tab !== "specify" || !CAN_SPECIFY);
 }
 
 // ── API HELPERS ────────────────────────────────────────────────────
@@ -802,7 +827,9 @@ async function api(path, method="GET", body=null) {
   };
   if (body) opts.body = JSON.stringify(body);
   const r = await fetch(`/annotator/api/${IMAGE_ID}/${path}`, opts);
-  return r.json();
+  const data = await r.json();
+  if (!r.ok && data.error) toast(data.error);
+  return data;
 }
 
 // ── LOAD BOXES ─────────────────────────────────────────────────────
@@ -861,7 +888,7 @@ function renderBox(b) {
   }
 
   // Resize handles (bound tab only)
-  if (ACTIVE_TAB === "bound") {
+  if (ACTIVE_TAB === "bound" && CAN_BOUND) {
     for (const cls of ["rh-nw","rh-ne","rh-sw","rh-se"]) {
       const rh = document.createElement("div");
       rh.className = `resize-handle ${cls}`;
@@ -935,6 +962,12 @@ function setupCanvasEvents() {
 }
 
 function onCanvasMouseDown(e) {
+  if (!CAN_BOUND) {
+    selectedId = null;
+    clearPanels();
+    return;
+  }
+
   // Only handle clicks directly on the wrapper or the image — not on boxes or handles
   const isOnBox    = e.target.closest(".bbox");
   const isOnHandle = e.target.classList.contains("resize-handle");
@@ -960,6 +993,13 @@ function onCanvasMouseDown(e) {
 }
 
 function onBoxMouseDown(e, id) {
+  if (IS_VIEWER || (ACTIVE_TAB === "bound" && !CAN_BOUND) || (ACTIVE_TAB === "classify" && !CAN_CLASSIFY) || (ACTIVE_TAB === "specify" && !CAN_SPECIFY)) {
+    e.preventDefault();
+    e.stopPropagation();
+    selectBox(id);
+    return;
+  }
+
   e.preventDefault(); // critical: stops browser drag hijack
   e.stopPropagation();
 
@@ -1092,6 +1132,7 @@ async function onMouseUp(e) {
 
 // ── CREATE / DELETE BOXES ──────────────────────────────────────────
 async function createBox(x, y, w, h) {
+  if (!CAN_BOUND) { toast("You do not have permission to create boxes"); return; }
   const data = await api("boxes/", "POST", { x, y, width: w, height: h });
   boxes.push(data);
   renderAllBoxes();
@@ -1102,7 +1143,9 @@ async function createBox(x, y, w, h) {
 }
 
 async function deleteBox(id) {
-  await api(`boxes/${id}/`, "DELETE");
+  if (!CAN_BOUND) { toast("You do not have permission to delete boxes"); return; }
+  const data = await api(`boxes/${id}/`, "DELETE");
+  if (data.error) return;
   const b = boxes.find(x => x.id === id);
   boxes = boxes.filter(x => x.id !== id);
   renderAllBoxes();
@@ -1121,6 +1164,7 @@ function deleteSelected() {
 // Per-box suggestions live in showClassifyPanel() below — this is the
 // "classify every unlabelled box on the frame" button.
 async function suggestAll() {
+  if (!CAN_CLASSIFY) { toast("You do not have permission to classify boxes"); return; }
   const btn = document.getElementById("suggest-all-btn");
   if (!btn) return;
   btn.classList.add("loading");
@@ -1157,6 +1201,10 @@ async function suggestAll() {
 
 // ── TOOL SWITCHING ─────────────────────────────────────────────────
 function setTool(t) {
+  if ((t === "draw" || t === "erase") && !CAN_BOUND) {
+    toast("You do not have permission to edit boxes");
+    return;
+  }
   currentTool = t;
   document.querySelectorAll(".tool-btn").forEach(b => b.classList.remove("active"));
   const el = document.getElementById(`tool-${t}`);
@@ -1170,9 +1218,9 @@ function setupKeyboard() {
   document.addEventListener("keydown", e => {
     if (e.target.tagName === "INPUT" || e.target.tagName === "TEXTAREA") return;
     if (e.key === "v" || e.key === "V") setTool("select");
-    if (e.key === "d" || e.key === "D") setTool("draw");
-    if (e.key === "e" || e.key === "E") setTool("erase");
-    if (e.key === "Delete" || e.key === "Backspace") deleteSelected();
+    if (CAN_BOUND && (e.key === "d" || e.key === "D")) setTool("draw");
+    if (CAN_BOUND && (e.key === "e" || e.key === "E")) setTool("erase");
+    if (CAN_BOUND && (e.key === "Delete" || e.key === "Backspace")) deleteSelected();
     if (e.key === "Escape") { selectedId = null; renderAllBoxes(); clearPanels(); }
   });
 }
@@ -1247,6 +1295,11 @@ function buildCatFilters() {
 
 async function showClassifyPanel(b) {
   const card = document.getElementById("ai-suggestion-card");
+  if (!CAN_CLASSIFY) {
+    if (card) card.innerHTML = `<div style="color:var(--text-dim); font-size:10px;">Read-only: you can view classifications but cannot change them.</div>`;
+    refreshTaxHighlight(b);
+    return;
+  }
   // If we already have a cached suggestion from suggestAll(), show it first.
   if (b._top_k && b._top_k.length) {
     renderSuggestionCard(b, { label: b.ai_suggested_label, confidence: b.ai_suggestion_confidence, top_k: b._top_k });
@@ -1315,6 +1368,7 @@ function refreshTaxHighlight(b) {
 }
 
 async function applyLabel(taxId, name, category) {
+  if (!CAN_CLASSIFY) { toast("You do not have permission to classify boxes"); return; }
   if (!selectedId) { toast("Select a box first"); return; }
   const data = await api(`boxes/${selectedId}/classify/`, "POST", { taxonomy_label_id: taxId });
   const b = boxes.find(x => x.id === selectedId);
@@ -1360,6 +1414,7 @@ function showSpecifyPanel(b) {
 }
 
 async function saveSpecify(finalise) {
+  if (!CAN_SPECIFY) { toast("You do not have permission to finalise boxes"); return; }
   if (!selectedId) return;
   const species = document.getElementById("spec-species")?.value || "";
   const notes   = document.getElementById("spec-notes")?.value   || "";
@@ -1391,6 +1446,7 @@ function updateRoutingSummary(labelled) {
 
 // ── EXPORT ─────────────────────────────────────────────────────────
 async function exportData() {
+  if (!CAN_EXPORT) { toast("You do not have permission to export"); return; }
   const data = await api("export/");
   const blob = new Blob([JSON.stringify(data, null, 2)], { type: "application/json" });
   const url  = URL.createObjectURL(blob);

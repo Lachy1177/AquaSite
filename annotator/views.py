@@ -18,6 +18,8 @@ from .models import AnalysisImage, BoundingBox, TaxonomyLabel, UserProfile
 
 @login_required
 def index(request):
+    role = get_user_role(request.user)
+
     images = AnalysisImage.objects.annotate(box_count=Count('boxes')).order_by("-uploaded_at")
 
     cluster_id = request.GET.get("cluster")
@@ -36,6 +38,7 @@ def index(request):
         "images": images,
         "clusters": list(clusters),
         "active_cluster": cluster_id,
+        "role": role,
     })
 
 @login_required
@@ -71,12 +74,16 @@ def upload_image(request):
 
 @login_required
 def workspace(request, image_id, tab="bound"):
+    role = get_user_role(request.user)
+
     image = get_object_or_404(AnalysisImage, pk=image_id)
     taxonomy = list(TaxonomyLabel.objects.values("id", "name", "category"))
+
     return render(request, "annotator/workspace.html", {
         "image": image,
         "active_tab": tab,
         "taxonomy_json": json.dumps(taxonomy),
+        "role": role,
     })
 
 
@@ -308,7 +315,7 @@ def api_export(request, image_id):
     Downstream ML pipelines / researchers can consume this.
     """
     role = get_user_role(request.user)
-    if role not in ["annotator", "admin"]:
+    if role not in ["researcher", "admin"]:
         return JsonResponse({"error": "Permission denied"}, status=403)
     image = get_object_or_404(AnalysisImage, pk=image_id)
     boxes = image.boxes.all()
