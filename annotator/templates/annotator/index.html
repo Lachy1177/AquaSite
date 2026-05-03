@@ -116,19 +116,23 @@
 <div class="header">
   <a class="logo" href="{% url 'annotator:index' %}"><span class="a">A</span><span class="s">S</span></a>
   <div class="subtitle">Marine Image Annotator — Aquatic Sciences</div>
+  {% if role == "admin" or role == "annotator"%}
   <button id="import-btn" onclick="importFromSupabase(event)"
     style="margin-left:auto; background:#2a2a2a; color:#4a9eff; border:1px solid #4a9eff;
-           padding:6px 16px; border-radius:3px; font-family:var(--mono); font-size:11px; cursor:pointer;">
+          padding:6px 16px; border-radius:3px; font-family:var(--mono); font-size:11px; cursor:pointer;">
     ↓ Import from Supabase
   </button>
+  {% endif %}
 </div>
 
+{% if role == "annotator" or role == "admin" %}
 <div class="upload-area" onclick="document.getElementById('file-input').click()">
   <input type="file" id="file-input" accept="image/*" onchange="uploadFile(this)">
   <div class="upload-title">Upload Image for Analysis</div>
   <div class="upload-sub">PNG, JPG, TIFF · Underwater / marine imagery</div>
   <div class="upload-btn">Choose File</div>
 </div>
+{% endif %}
 
 {% if clusters %}
 <div class="cluster-bar">
