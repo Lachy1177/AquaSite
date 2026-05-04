@@ -11,6 +11,7 @@ from django.utils import timezone
 from .supabase_storage import upload_image_to_supabase
 from django.http import HttpResponseForbidden
 from .models import AnalysisImage, BoundingBox, TaxonomyLabel, UserProfile
+import time
 
 
 # ---------------------------------------------------------------------------
@@ -302,18 +303,37 @@ def api_classify_box(request, image_id, box_id):
     role = get_user_role(request.user)
     if role not in ["classifier", "admin"]:
         return JsonResponse({"error": "Permission denied"}, status=403)
-
     image = get_object_or_404(AnalysisImage, pk=image_id)
     box   = get_object_or_404(BoundingBox, pk=box_id, image=image)
     data  = json.loads(request.body)
-
     label_id = data.get("taxonomy_label_id")
     if label_id:
         label = get_object_or_404(TaxonomyLabel, pk=label_id)
         box.taxonomy_label = label
     box.classified_by = request.user if request.user.is_authenticated else None
     box.classified_at = timezone.now()
-    box.save()
+    box.save()    
+    return JsonResponse(box.to_dict())
+
+
+@require_POST
+def api_classify_boxes(request, image_id, box_id):
+    """Assign a taxonomy label to a box."""
+    role = get_user_role(request.user)
+    if role not in ["classifier", "admin"]:
+        return JsonResponse({"error": "Permission denied"}, status=403)
+    image = get_object_or_404(AnalysisImage, pk=image_id)
+    data  = json.loads(request.body)
+    label_id = data.get("taxonomy_label_id")
+    boxes = data.get("Attached")
+    for box_id in boxes:
+        box   = get_object_or_404(BoundingBox, pk=box_id, image=image)
+        if label_id:
+            label = get_object_or_404(TaxonomyLabel, pk=label_id)
+            box.taxonomy_label = label
+        box.classified_by = request.user if request.user.is_authenticated else None
+        box.classified_at = timezone.now()
+        box.save()
     return JsonResponse(box.to_dict())
 
 
