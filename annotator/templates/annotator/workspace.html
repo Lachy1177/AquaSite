@@ -108,6 +108,52 @@
   }
   .export-btn:hover { border-color: var(--accent); color: var(--accent); }
 
+  /* ─── QUEUE NAV BAR (NEW) ───────────────────────────────────── */
+  .queue-bar {
+    height: 32px;
+    background: #1a2520;
+    border-bottom: 1px solid #2a4030;
+    display: flex;
+    align-items: center;
+    padding: 0 14px;
+    gap: 8px;
+    flex-shrink: 0;
+  }
+  .queue-pos {
+    font-size: 10px;
+    color: var(--green);
+    flex: 1;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+  .queue-pos.empty { color: var(--text-muted); }
+
+  .q-btn {
+    padding: 3px 11px;
+    border-radius: 2px;
+    font-family: var(--mono);
+    font-size: 10px;
+    cursor: pointer;
+    transition: all 0.15s;
+    white-space: nowrap;
+    background: none;
+    border: 1px solid var(--border-hi);
+    color: var(--text-muted);
+    text-decoration: none;
+    display: inline-flex;
+    align-items: center;
+  }
+  .q-btn:hover { border-color: var(--accent); color: var(--accent); }
+  .q-btn:disabled { opacity: 0.35; cursor: default; pointer-events: none; }
+
+  .q-btn.submit-bound    { background: var(--accent); border-color: var(--accent); color: #000; font-weight: 700; }
+  .q-btn.submit-classify { background: var(--amber);  border-color: var(--amber);  color: #000; font-weight: 700; }
+  .q-btn.submit-specify  { background: var(--green);  border-color: var(--green);  color: #000; font-weight: 700; }
+  .q-btn.submit-bound:hover,
+  .q-btn.submit-classify:hover,
+  .q-btn.submit-specify:hover { opacity: 0.85; }
+
   /* ─── TABS ──────────────────────────────────────────────────── */
   .tabs {
     height: var(--tab-h);
@@ -253,7 +299,6 @@
     justify-content: center;
     position: relative;
   }
-  /* Checkerboard for transparency */
   .canvas-scroll::before {
     content: '';
     position: absolute;
@@ -547,11 +592,43 @@
 <div class="title-bar">
   <a class="logo" href="{% url 'annotator:index' %}"><span class="a">A</span><span class="s">S</span></a>
   <div class="title-filename">{{ image.original_filename }}</div>
-  <span class="title-status status-{{ image.status }}">{{ image.get_status_display }}</span>
+  <span class="title-status status-{{ image.status }}" id="title-status-chip">{{ image.get_status_display }}</span>
   {% if role == "researcher" or role == "admin" %}
   <button class="export-btn" onclick="exportData()">Export JSON</button>
   {% endif %}
 </div>
+
+<!-- ── QUEUE NAV BAR ─────────────────────────────────────────────── -->
+{% if user_stage or role == "admin" %}
+<div class="queue-bar">
+  <span class="queue-pos" id="queue-pos">Checking queue…</span>
+
+  <!-- Back to gallery filtered to this stage -->
+  <a class="q-btn" href="{% url 'annotator:index' %}{% if user_stage %}?status={{ user_stage }}{% endif %}">
+    ← Gallery
+  </a>
+
+  <!-- Browse to next without advancing status -->
+  <button class="q-btn" id="btn-next" onclick="goNextImage()" disabled>
+    Next →
+  </button>
+
+  <!-- Advance status + go to next — label and colour per stage -->
+  {% if role == "annotator" or role == "admin" and active_tab == "bound" %}
+  <button class="q-btn submit-bound" id="btn-submit-next" onclick="submitAndNext('bound')">
+    Send to Classify &amp; Next
+  </button>
+  {% elif role == "classifier" or role == "admin" and active_tab == "classify" %}
+  <button class="q-btn submit-classify" id="btn-submit-next" onclick="submitAndNext('classify')">
+    Send to Specify &amp; Next
+  </button>
+  {% elif role == "researcher" or role == "admin" and active_tab == "specify" %}
+  <button class="q-btn submit-specify" id="btn-submit-next" onclick="submitAndNext('specify')">
+    Mark Complete &amp; Next
+  </button>
+  {% endif %}
+</div>
+{% endif %}
 
 <!-- ── TABS ───────────────────────────────────────────────────────── -->
 <div class="tabs">
@@ -736,10 +813,12 @@
 <!-- ─────────────────────────────────────────────────────────────── -->
 <script>
 const IMAGE_ID   = "{{ image.id }}";
+const IMAGE_STATUS = "{{ image.status }}";
 const ACTIVE_TAB = "{{ active_tab }}";
 const TAXONOMY   = {{ taxonomy_json|safe }};
 const CSRF       = "{{ csrf_token }}";
 const USER_ROLE  = "{{ role }}";
+const USER_STAGE = "{{ user_stage }}";  // pipeline stage for this user's role
 
 const CAN_BOUND    = USER_ROLE === "annotator" || USER_ROLE === "admin";
 const CAN_CLASSIFY = USER_ROLE === "classifier" || USER_ROLE === "admin";
@@ -748,11 +827,11 @@ const CAN_EXPORT   = USER_ROLE === "researcher" || USER_ROLE === "admin";
 const IS_VIEWER    = USER_ROLE === "viewer";
 
 // ── STATE ──────────────────────────────────────────────────────────
-let boxes        = [];   // array of box dicts from server
+let boxes        = [];
 let selectedId   = null;
 let currentTool  = "select";
-let imgNatW      = 0, imgNatH = 0;  // natural image dimensions
-let imgDispW     = 0, imgDispH = 0; // displayed dimensions
+let imgNatW      = 0, imgNatH = 0;
+let imgDispW     = 0, imgDispH = 0;
 let drawStart    = null;
 let isDragging   = false;
 let dragOffX     = 0, dragOffY = 0;
@@ -762,6 +841,10 @@ let resizeHandle = null;
 let resizeStart  = null;
 let resizeBoxSnapshot = null;
 let boxOpacity   = 0.08;
+
+// ── QUEUE STATE ────────────────────────────────────────────────────
+let _nextImageId  = null;
+let _nextImageTab = null;
 
 // ── CATEGORY COLOURS ───────────────────────────────────────────────
 const CAT_COLORS = {
@@ -781,6 +864,8 @@ document.addEventListener("DOMContentLoaded", async () => {
   setupTabUI();
   setupCanvasEvents();
   setupKeyboard();
+  // Load queue info asynchronously — doesn't block the annotation UI
+  fetchQueueInfo();
 });
 
 function initAfterLoad() {
@@ -844,12 +929,8 @@ async function loadBoxes() {
 // ── RENDER BOXES ON CANVAS ─────────────────────────────────────────
 function renderAllBoxes() {
   updateImgDims();
-  // Remove existing rendered boxes (but not the ghost)
   document.querySelectorAll(".bbox").forEach(el => el.remove());
-
-  for (const b of boxes) {
-    renderBox(b);
-  }
+  for (const b of boxes) { renderBox(b); }
 }
 
 function renderBox(b) {
@@ -859,19 +940,16 @@ function renderBox(b) {
   el.dataset.id = b.id;
   el.dataset.category = b.taxonomy_category || "";
 
-  // Position
   const px = (b.x / 100) * imgDispW;
   const py = (b.y / 100) * imgDispH;
   const pw = (b.width / 100) * imgDispW;
   const ph = (b.height / 100) * imgDispH;
   el.style.cssText = `left:${px}px;top:${py}px;width:${pw}px;height:${ph}px;`;
 
-  // Opacity from slider
   const col = CAT_COLORS[b.taxonomy_category] || CAT_COLORS.null;
   el.style.background = hexAlpha(col, boxOpacity);
   el.style.borderColor = col;
 
-  // Label chip
   const lbl = document.createElement("div");
   lbl.className = "bbox-label";
   lbl.textContent = b.taxonomy_label || (b.source === "dino" ? `DINO ${Math.round((b.confidence||0)*100)}%` : "manual");
@@ -879,7 +957,6 @@ function renderBox(b) {
   lbl.style.color = lightness(col) > 0.5 ? "#000" : "#fff";
   el.appendChild(lbl);
 
-  // Confidence footer
   if (b.confidence != null && !b.taxonomy_label) {
     const cf = document.createElement("div");
     cf.className = "bbox-conf";
@@ -887,7 +964,6 @@ function renderBox(b) {
     el.appendChild(cf);
   }
 
-  // Resize handles (bound tab only)
   if (ACTIVE_TAB === "bound" && CAN_BOUND) {
     for (const cls of ["rh-nw","rh-ne","rh-sw","rh-se"]) {
       const rh = document.createElement("div");
@@ -897,7 +973,6 @@ function renderBox(b) {
     }
   }
 
-  // Events
   el.addEventListener("mousedown", e => onBoxMouseDown(e, b.id));
   el.addEventListener("click",     e => { e.stopPropagation(); selectBox(b.id); });
 
@@ -942,16 +1017,11 @@ function getFreshDims() {
 
 function setupCanvasEvents() {
   const wrapper = document.getElementById("image-wrapper");
-
-  // Prevent browser's native image drag from hijacking our mouse gestures
   wrapper.addEventListener("dragstart", e => e.preventDefault());
   document.getElementById("main-image").addEventListener("dragstart", e => e.preventDefault());
-
   wrapper.addEventListener("mousedown", onCanvasMouseDown);
   document.addEventListener("mousemove", onMouseMove);
   document.addEventListener("mouseup",   onMouseUp);
-
-  // Coord display
   wrapper.addEventListener("mousemove", e => {
     const r = getWrapperRect();
     const dims = getFreshDims();
@@ -962,19 +1032,11 @@ function setupCanvasEvents() {
 }
 
 function onCanvasMouseDown(e) {
-  if (!CAN_BOUND) {
-    selectedId = null;
-    clearPanels();
-    return;
-  }
-
-  // Only handle clicks directly on the wrapper or the image — not on boxes or handles
+  if (!CAN_BOUND) { selectedId = null; clearPanels(); return; }
   const isOnBox    = e.target.closest(".bbox");
   const isOnHandle = e.target.classList.contains("resize-handle");
   if (isOnHandle || isOnBox) return;
-
-  e.preventDefault(); // stop browser text-selection and native drag
-
+  e.preventDefault();
   if (currentTool === "draw") {
     const r = getWrapperRect();
     drawStart = { x: e.clientX - r.left, y: e.clientY - r.top };
@@ -985,7 +1047,6 @@ function onCanvasMouseDown(e) {
     ghost.style.height  = "0px";
     ghost.style.display = "block";
   } else {
-    // Clicked empty canvas — deselect
     selectedId = null;
     renderAllBoxes();
     clearPanels();
@@ -994,15 +1055,11 @@ function onCanvasMouseDown(e) {
 
 function onBoxMouseDown(e, id) {
   if (IS_VIEWER || (ACTIVE_TAB === "bound" && !CAN_BOUND) || (ACTIVE_TAB === "classify" && !CAN_CLASSIFY) || (ACTIVE_TAB === "specify" && !CAN_SPECIFY)) {
-    e.preventDefault();
-    e.stopPropagation();
+    e.preventDefault(); e.stopPropagation();
     selectBox(id);
     return;
   }
-
-  e.preventDefault(); // critical: stops browser drag hijack
-  e.stopPropagation();
-
+  e.preventDefault(); e.stopPropagation();
   if (e.target.classList.contains("resize-handle")) {
     isResizing        = true;
     resizeHandle      = e.target.dataset.handle;
@@ -1010,12 +1067,7 @@ function onBoxMouseDown(e, id) {
     resizeBoxSnapshot = { ...boxes.find(b => b.id === id) };
     return;
   }
-
-  if (currentTool === "erase") {
-    deleteBox(id);
-    return;
-  }
-
+  if (currentTool === "erase") { deleteBox(id); return; }
   if (currentTool === "select") {
     isDragging = true;
     dragBoxId  = id;
@@ -1030,7 +1082,6 @@ function onBoxMouseDown(e, id) {
 function onMouseMove(e) {
   const r    = getWrapperRect();
   const dims = getFreshDims();
-
   if (drawStart) {
     const cx = e.clientX - r.left;
     const cy = e.clientY - r.top;
@@ -1039,13 +1090,10 @@ function onMouseMove(e) {
     const w  = Math.abs(cx - drawStart.x);
     const h  = Math.abs(cy - drawStart.y);
     const ghost = document.getElementById("draw-ghost");
-    ghost.style.left   = x + "px";
-    ghost.style.top    = y + "px";
-    ghost.style.width  = w + "px";
-    ghost.style.height = h + "px";
+    ghost.style.left   = x + "px"; ghost.style.top    = y + "px";
+    ghost.style.width  = w + "px"; ghost.style.height = h + "px";
     ghost.style.display = "block";
   }
-
   if (isDragging && dragBoxId) {
     const cx = e.clientX - r.left - dragOffX;
     const cy = e.clientY - r.top  - dragOffY;
@@ -1056,7 +1104,6 @@ function onMouseMove(e) {
       renderAllBoxes();
     }
   }
-
   if (isResizing && resizeBoxSnapshot) {
     const dx   = ((e.clientX - resizeStart.x) / dims.w) * 100;
     const dy   = ((e.clientY - resizeStart.y) / dims.h) * 100;
@@ -1068,21 +1115,18 @@ function onMouseMove(e) {
       b.height = Math.max(2, snap.height + dy);
     } else if (resizeHandle === "rh-sw") {
       const newW = Math.max(2, snap.width - dx);
-      b.x      = snap.x + (snap.width - newW);
-      b.width  = newW;
+      b.x = snap.x + (snap.width - newW); b.width = newW;
       b.height = Math.max(2, snap.height + dy);
     } else if (resizeHandle === "rh-ne") {
-      b.width       = Math.max(2, snap.width + dx);
-      const newH    = Math.max(2, snap.height - dy);
-      b.y      = snap.y + (snap.height - newH);
-      b.height = newH;
+      b.width = Math.max(2, snap.width + dx);
+      const newH = Math.max(2, snap.height - dy);
+      b.y = snap.y + (snap.height - newH); b.height = newH;
     } else if (resizeHandle === "rh-nw") {
       const newW = Math.max(2, snap.width  - dx);
       const newH = Math.max(2, snap.height - dy);
-      b.x      = snap.x + (snap.width  - newW);
-      b.y      = snap.y + (snap.height - newH);
-      b.width  = newW;
-      b.height = newH;
+      b.x = snap.x + (snap.width - newW);
+      b.y = snap.y + (snap.height - newH);
+      b.width = newW; b.height = newH;
     }
     renderAllBoxes();
   }
@@ -1091,8 +1135,6 @@ function onMouseMove(e) {
 async function onMouseUp(e) {
   const r    = getWrapperRect();
   const dims = getFreshDims();
-
-  // ── Finish drawing ──────────────────────────────────────────────
   if (drawStart) {
     const cx = e.clientX - r.left;
     const cy = e.clientY - r.top;
@@ -1108,24 +1150,18 @@ async function onMouseUp(e) {
         (w / dims.w) * 100, (h / dims.h) * 100
       );
     }
-    return; // don't also fire drag/resize cleanup
+    return;
   }
-
-  // ── Finish dragging ─────────────────────────────────────────────
   if (isDragging && dragBoxId) {
-    isDragging     = false;
-    const savedId  = dragBoxId;
-    dragBoxId      = null;
-    const b        = boxes.find(x => x.id === savedId);
+    isDragging = false;
+    const savedId = dragBoxId; dragBoxId = null;
+    const b = boxes.find(x => x.id === savedId);
     if (b) await api(`boxes/${savedId}/`, "PATCH", { x: b.x, y: b.y });
   }
-
-  // ── Finish resizing ─────────────────────────────────────────────
   if (isResizing && resizeBoxSnapshot) {
-    isResizing        = false;
-    const b           = boxes.find(x => x.id === resizeBoxSnapshot.id);
-    resizeBoxSnapshot = null;
-    resizeHandle      = null;
+    isResizing = false;
+    const b = boxes.find(x => x.id === resizeBoxSnapshot.id);
+    resizeBoxSnapshot = null; resizeHandle = null;
     if (b) await api(`boxes/${b.id}/`, "PATCH", { x: b.x, y: b.y, width: b.width, height: b.height });
   }
 }
@@ -1135,9 +1171,7 @@ async function createBox(x, y, w, h) {
   if (!CAN_BOUND) { toast("You do not have permission to create boxes"); return; }
   const data = await api("boxes/", "POST", { x, y, width: w, height: h });
   boxes.push(data);
-  renderAllBoxes();
-  renderBoxLists();
-  updateCounts();
+  renderAllBoxes(); renderBoxLists(); updateCounts();
   selectBox(data.id);
   toast("Box created");
 }
@@ -1146,13 +1180,9 @@ async function deleteBox(id) {
   if (!CAN_BOUND) { toast("You do not have permission to delete boxes"); return; }
   const data = await api(`boxes/${id}/`, "DELETE");
   if (data.error) return;
-  const b = boxes.find(x => x.id === id);
   boxes = boxes.filter(x => x.id !== id);
-  renderAllBoxes();
-  renderBoxLists();
-  updateCounts();
-  selectedId = null;
-  clearPanels();
+  renderAllBoxes(); renderBoxLists(); updateCounts();
+  selectedId = null; clearPanels();
   toast("Box deleted");
 }
 
@@ -1161,8 +1191,6 @@ function deleteSelected() {
 }
 
 // ── DINO CLASSIFICATION (batch) ────────────────────────────────────
-// Per-box suggestions live in showClassifyPanel() below — this is the
-// "classify every unlabelled box on the frame" button.
 async function suggestAll() {
   if (!CAN_CLASSIFY) { toast("You do not have permission to classify boxes"); return; }
   const btn = document.getElementById("suggest-all-btn");
@@ -1172,12 +1200,8 @@ async function suggestAll() {
   btn.textContent = "Classifying…";
   try {
     const data = await api("suggest-all/", "POST");
-    if (data.error) {
-      toast(data.error);
-      return;
-    }
+    if (data.error) { toast(data.error); return; }
     const suggestions = data.suggestions || [];
-    // Write suggestions onto existing boxes as ai_suggested_label (no DB write).
     for (const s of suggestions) {
       const b = boxes.find(x => x.id === s.box_id);
       if (!b) continue;
@@ -1185,9 +1209,7 @@ async function suggestAll() {
       b.ai_suggestion_confidence = s.confidence;
       b._top_k = s.top_k;
     }
-    renderAllBoxes();
-    renderBoxLists();
-    // If one is currently selected, refresh its suggestion card.
+    renderAllBoxes(); renderBoxLists();
     if (selectedId) {
       const b = boxes.find(x => x.id === selectedId);
       if (b) renderSuggestionCard(b, { label: b.ai_suggested_label, confidence: b.ai_suggestion_confidence, top_k: b._top_k });
@@ -1202,8 +1224,7 @@ async function suggestAll() {
 // ── TOOL SWITCHING ─────────────────────────────────────────────────
 function setTool(t) {
   if ((t === "draw" || t === "erase") && !CAN_BOUND) {
-    toast("You do not have permission to edit boxes");
-    return;
+    toast("You do not have permission to edit boxes"); return;
   }
   currentTool = t;
   document.querySelectorAll(".tool-btn").forEach(b => b.classList.remove("active"));
@@ -1228,16 +1249,10 @@ function setupKeyboard() {
 // ── BOX LISTS (left panel) ─────────────────────────────────────────
 function renderBoxLists() {
   const active = boxes;
-
-  // Bound
   const bl = document.getElementById("box-list-left");
   if (bl) bl.innerHTML = active.map(b => boxListItem(b)).join("");
-
-  // Classify
   const cl = document.getElementById("classify-box-list");
   if (cl) cl.innerHTML = active.map(b => boxListItem(b)).join("");
-
-  // Specify (labelled boxes only)
   const sl = document.getElementById("specify-box-list");
   if (sl) {
     const labelled = active.filter(b => b.taxonomy_label);
@@ -1300,7 +1315,6 @@ async function showClassifyPanel(b) {
     refreshTaxHighlight(b);
     return;
   }
-  // If we already have a cached suggestion from suggestAll(), show it first.
   if (b._top_k && b._top_k.length) {
     renderSuggestionCard(b, { label: b.ai_suggested_label, confidence: b.ai_suggestion_confidence, top_k: b._top_k });
   } else {
@@ -1312,8 +1326,6 @@ async function showClassifyPanel(b) {
       <button class="dino-btn w100" disabled style="margin-top:6px">Suggest</button>`;
   }
   refreshTaxHighlight(b);
-
-  // Fetch a fresh suggestion for this box.
   try {
     const res = await api(`boxes/${b.id}/suggest/`, "POST");
     if (res.error) {
@@ -1373,8 +1385,7 @@ async function applyLabel(taxId, name, category) {
   const data = await api(`boxes/${selectedId}/classify/`, "POST", { taxonomy_label_id: taxId });
   const b = boxes.find(x => x.id === selectedId);
   if (b) { b.taxonomy_label = name; b.taxonomy_category = category; }
-  renderAllBoxes();
-  renderBoxLists();
+  renderAllBoxes(); renderBoxLists();
   document.querySelectorAll(".tax-item").forEach(el => el.classList.remove("applied"));
   document.getElementById(`tax-${taxId}`)?.classList.add("applied");
   toast(`Labelled as ${name}`);
@@ -1391,11 +1402,9 @@ function showSpecifyPanel(b) {
   const form = document.getElementById("specify-form");
   const info = document.getElementById("specify-class-info");
   if (!form) return;
-
   info.innerHTML = b.taxonomy_label
     ? `<span style="color:${CAT_COLORS[b.taxonomy_category]||'#999'}">${b.taxonomy_category}</span> / ${b.taxonomy_label}`
     : "<em>Not classified yet</em>";
-
   form.innerHTML = `
     <div class="prop-group">
       <div class="spec-label">Species / Identification</div>
@@ -1419,14 +1428,11 @@ async function saveSpecify(finalise) {
   const species = document.getElementById("spec-species")?.value || "";
   const notes   = document.getElementById("spec-notes")?.value   || "";
   const data = await api(`boxes/${selectedId}/specify/`, "POST", {
-    species_name: species,
-    researcher_notes: notes,
-    is_finalized: finalise,
+    species_name: species, researcher_notes: notes, is_finalized: finalise,
   });
   const b = boxes.find(x => x.id === selectedId);
   if (b) { b.species_name = data.species_name; b.researcher_notes = data.researcher_notes; b.is_finalized = data.is_finalized; }
-  renderAllBoxes();
-  renderBoxLists();
+  renderAllBoxes(); renderBoxLists();
   toast(finalise ? "Box finalised ✓" : "Draft saved");
 }
 
@@ -1457,10 +1463,7 @@ async function exportData() {
 }
 
 // ── MISC HELPERS ───────────────────────────────────────────────────
-function setBoxOpacity(v) {
-  boxOpacity = v / 100;
-  renderAllBoxes();
-}
+function setBoxOpacity(v) { boxOpacity = v / 100; renderAllBoxes(); }
 
 function clearPanels() {
   const p = document.getElementById("bound-props");
@@ -1494,6 +1497,123 @@ function toast(msg) {
 }
 
 window.addEventListener("resize", () => { updateImgDims(); renderAllBoxes(); });
+
+// ── QUEUE NAVIGATION (NEW) ─────────────────────────────────────────
+/**
+ * fetchQueueInfo()
+ * Calls the queue API to find out how many images are waiting and what
+ * the next one is. Updates the queue bar UI. Does NOT navigate.
+ *
+ * For admin users the stage is taken from ACTIVE_TAB so the queue bar
+ * reflects whichever annotation mode they are currently in.
+ */
+async function fetchQueueInfo() {
+  const stage = USER_STAGE || (USER_ROLE === "admin" ? ACTIVE_TAB : null);
+  if (!stage) return;   // viewer — no queue
+  try {
+    const qs  = USER_ROLE === "admin" ? `&stage=${stage}` : "";
+    const url = `/annotator/api/queue/next/?current=${IMAGE_ID}${qs}`;
+    const r   = await fetch(url);
+    const d   = await r.json();
+
+    _nextImageId  = d.next  || null;
+    _nextImageTab = d.tab   || stage;
+
+    const posEl   = document.getElementById("queue-pos");
+    const nextBtn = document.getElementById("btn-next");
+
+    if (posEl) {
+      if (d.remaining > 0) {
+        posEl.textContent = `${d.remaining} image${d.remaining === 1 ? "" : "s"} remaining in queue`;
+        posEl.classList.remove("empty");
+      } else {
+        posEl.textContent = "Queue empty — you're all caught up!";
+        posEl.classList.add("empty");
+      }
+    }
+    if (nextBtn) nextBtn.disabled = !d.next;
+
+  } catch (err) {
+    const posEl = document.getElementById("queue-pos");
+    if (posEl) { posEl.textContent = "Queue unavailable"; posEl.classList.add("empty"); }
+  }
+}
+
+/**
+ * goNextImage()
+ * Navigate to the next queued image WITHOUT advancing the current one's
+ * status. Used by the "Next →" button for browsing the queue.
+ */
+async function goNextImage() {
+  if (!_nextImageId) {
+    // Try a fresh fetch — maybe queue info hasn't loaded yet
+    await fetchQueueInfo();
+  }
+  if (_nextImageId) {
+    window.location.href = `/annotator/${_nextImageId}/${_nextImageTab}/`;
+  } else {
+    toast("Queue is empty — nothing more to do!");
+  }
+}
+
+/**
+ * submitAndNext(currentStage)
+ * Advance this image to the next pipeline stage, then navigate to the
+ * next queued image. If the queue is empty, redirects to the gallery.
+ *
+ * currentStage: the stage to advance FROM (matches USER_STAGE for role users;
+ *               for admin it's the ACTIVE_TAB passed from the button onclick).
+ */
+async function submitAndNext(currentStage) {
+  const btn = document.getElementById("btn-submit-next");
+  const origText = btn ? btn.textContent : "";
+  if (btn) { btn.disabled = true; btn.textContent = "Saving…"; }
+
+  try {
+    const r = await fetch(`/annotator/api/${IMAGE_ID}/advance/`, {
+      method: "POST",
+      headers: { "X-CSRFToken": CSRF, "Content-Type": "application/json" },
+    });
+    const d = await r.json();
+
+    if (d.error) {
+      toast(d.error);
+      if (btn) { btn.disabled = false; btn.textContent = origText; }
+      return;
+    }
+
+    // Update the status chip so the user can see the change
+    const statusEl = document.getElementById("title-status-chip");
+    if (statusEl) {
+      statusEl.className = `title-status status-${d.new_status}`;
+      const labels = { bound:"Bounding", classify:"Classifying", specify:"Specifying", complete:"Complete" };
+      statusEl.textContent = labels[d.new_status] || d.new_status;
+    }
+
+    toast(`Moved to ${d.new_status} ✓`);
+
+    // Brief pause so the toast is visible, then navigate
+    await new Promise(res => setTimeout(res, 500));
+
+    if (_nextImageId) {
+      window.location.href = `/annotator/${_nextImageId}/${_nextImageTab}/`;
+    } else {
+      // Re-fetch in case fetchQueueInfo() hadn't resolved yet
+      await fetchQueueInfo();
+      if (_nextImageId) {
+        window.location.href = `/annotator/${_nextImageId}/${_nextImageTab}/`;
+      } else {
+        // Nothing left — back to the filtered gallery
+        const stage = USER_STAGE || currentStage || "bound";
+        window.location.href = `/annotator/?status=${stage}`;
+      }
+    }
+
+  } catch (err) {
+    toast("Could not advance: " + err);
+    if (btn) { btn.disabled = false; btn.textContent = origText; }
+  }
+}
 </script>
 </body>
 </html>
