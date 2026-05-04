@@ -24,7 +24,9 @@ urlpatterns = [
     path("api/<uuid:image_id>/suggest-all/", views.api_suggest_all, name="api_suggest_all"),
 
     # ── Classification & specification ───────────────────────────────
+    path("api/<uuid:image_id>/boxes/<uuid:box_id>/classify_many/", views.api_classify_boxes, name="api_classify_many"),
     path("api/<uuid:image_id>/boxes/<uuid:box_id>/classify/", views.api_classify_box, name="api_classify"),
+
     path("api/<uuid:image_id>/boxes/<uuid:box_id>/specify/", views.api_specify_box, name="api_specify"),
 
     # ── Export ───────────────────────────────────────────────────────
