@@ -1330,12 +1330,14 @@ function buildCatFilters() {
 
 async function showClassifyPanel(b) {
 
-    if (!autoAI) {
-    // Was gonna have a notice somewhere that autoAI was turned off.
+  const card = document.getElementById("ai-suggestion-card");
+
+  if (!autoAI) {
+    card.innerHTML = `<div style="color:var(--text-dim); font-size:10px;">Auto-suggest has been turned off.</div>`;
+    refreshTaxHighlight(b);
     return;
   }
 
-  const card = document.getElementById("ai-suggestion-card");
   if (!CAN_CLASSIFY) {
     if (card) card.innerHTML = `<div style="color:var(--text-dim); font-size:10px;">Read-only: you can view classifications but cannot change them.</div>`;
     refreshTaxHighlight(b);
