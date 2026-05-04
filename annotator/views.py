@@ -319,15 +319,17 @@ def api_classify_box(request, image_id, box_id):
 
 @login_required
 @require_POST
-def api_classify_boxes(request, image_id, box_id):
-    """Assign a taxonomy label to a box."""
+def api_classify_boxes(request, image_id):
+    """Assign a taxonomy label to multiple boxes at once."""
     role = get_user_role(request.user)
     if role not in ["classifier", "admin"]:
         return JsonResponse({"error": "Permission denied"}, status=403)
     image = get_object_or_404(AnalysisImage, pk=image_id)
     data  = json.loads(request.body)
     label_id = data.get("taxonomy_label_id")
-    boxes = data.get("Attached")
+    boxes = data.get("Attached") or []
+    if not boxes:
+        return JsonResponse({"error": "No box IDs provided"}, status=400)
     for box_id in boxes:
         box = get_object_or_404(BoundingBox.objects.select_related("taxonomy_label"), pk=box_id, image=image)
         if label_id:
