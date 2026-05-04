@@ -1410,8 +1410,9 @@ function refreshTaxHighlight(b) {
 async function applyLabel(taxId, name, category) {
   if (!CAN_CLASSIFY) { toast("You do not have permission to classify boxes"); return; }
   if (!selectedId) { toast("Select a box first"); return; }
+  const data = await api(`boxes/${selectedBoxes[0]}/classify_many/`, "POST", {
+    taxonomy_label_id: taxId, Attached: selectedBoxes });
   for (selected of selectedBoxes) {
-    const data = await api(`boxes/${selected}/classify/`, "POST", { taxonomy_label_id: taxId });
     const b = boxes.find(x => x.id === selected);
     if (b) { b.taxonomy_label = name; b.taxonomy_category = category; }
     document.querySelectorAll(".tax-item").forEach(el => el.classList.remove("applied"));
