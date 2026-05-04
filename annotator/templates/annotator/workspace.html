@@ -739,6 +739,11 @@
           ▶ Classify all unclassified
         </button>
         <div class="tool-sep"></div>
+        <button class="dino-btn-auto" id="turn-off-auto" onclick="toggleAutoSuggest()"
+                  title="Turn off the automatic AI suggestions to enhance manual performance">
+          Turn off auto-suggest
+        </button>
+        <div class="tool-sep"></div>
         <span class="tool-label">Click a box to classify it →</span>
       </div>
 
@@ -748,6 +753,11 @@
           <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5">
             <path d="M3 2l10 6-5.5 1.5L6 14z"/>
           </svg>
+        </button>
+        <div class="tool-sep"></div>
+        <button class="specify-quick" id="finalise-all" onclick="finaliseAll()"
+                title="Finalise All">
+          Finalise all classifications
         </button>
         <div class="tool-sep"></div>
         <span class="tool-label">Select a box to specify species →</span>
@@ -829,6 +839,8 @@ const IS_VIEWER    = USER_ROLE === "viewer";
 // ── STATE ──────────────────────────────────────────────────────────
 let boxes        = [];
 let selectedId   = null;
+let selectedBoxes = [];
+let autoAI       = true;
 let currentTool  = "select";
 let imgNatW      = 0, imgNatH = 0;
 let imgDispW     = 0, imgDispH = 0;
@@ -982,13 +994,15 @@ function renderBox(b) {
 // ── BOX INTERACTION ────────────────────────────────────────────────
 function selectBox(id) {
   selectedId = id;
+  if (event.shiftKey) {selectedBoxes.push(selectedId);
+  } else {selectedBoxes = [selectedId];}
   renderAllBoxes();
   const b = boxes.find(x => x.id === id);
   if (!b) return;
   updatePropsPanel(b);
   if (ACTIVE_TAB === "classify") showClassifyPanel(b);
   if (ACTIVE_TAB === "specify")  showSpecifyPanel(b);
-  highlightListItem(id);
+  highlightListItem(selectedBoxes)
 }
 
 function updatePropsPanel(b) {
@@ -1191,6 +1205,11 @@ function deleteSelected() {
 }
 
 // ── DINO CLASSIFICATION (batch) ────────────────────────────────────
+async function toggleAutoSuggest() {
+autoAI = !autoAI;
+toast(`Toggle auto-suggest has been set to ${autoAI}`)
+}
+  
 async function suggestAll() {
   if (!CAN_CLASSIFY) { toast("You do not have permission to classify boxes"); return; }
   const btn = document.getElementById("suggest-all-btn");
@@ -1275,11 +1294,12 @@ function boxListItem(b) {
 }
 
 function highlightListItem(id) {
+  // Currently no deselect function.
   document.querySelectorAll(".box-item").forEach(el => {
-    el.classList.toggle("active", el.dataset.id === id);
+    el.classList.toggle("active", id.includes(el.dataset.id));
   });
 }
-
+  
 function updateCounts() {
   const n = boxes.length;
   document.querySelectorAll("#box-count,#classify-box-count,#specify-box-count")
@@ -1309,6 +1329,12 @@ function buildCatFilters() {
 }
 
 async function showClassifyPanel(b) {
+
+    if (!autoAI) {
+    // Was gonna have a notice somewhere that autoAI was turned off.
+    return;
+  }
+
   const card = document.getElementById("ai-suggestion-card");
   if (!CAN_CLASSIFY) {
     if (card) card.innerHTML = `<div style="color:var(--text-dim); font-size:10px;">Read-only: you can view classifications but cannot change them.</div>`;
@@ -1382,12 +1408,15 @@ function refreshTaxHighlight(b) {
 async function applyLabel(taxId, name, category) {
   if (!CAN_CLASSIFY) { toast("You do not have permission to classify boxes"); return; }
   if (!selectedId) { toast("Select a box first"); return; }
-  const data = await api(`boxes/${selectedId}/classify/`, "POST", { taxonomy_label_id: taxId });
-  const b = boxes.find(x => x.id === selectedId);
-  if (b) { b.taxonomy_label = name; b.taxonomy_category = category; }
-  renderAllBoxes(); renderBoxLists();
-  document.querySelectorAll(".tax-item").forEach(el => el.classList.remove("applied"));
-  document.getElementById(`tax-${taxId}`)?.classList.add("applied");
+  for (selected of selectedBoxes) {
+    const data = await api(`boxes/${selected}/classify/`, "POST", { taxonomy_label_id: taxId });
+    const b = boxes.find(x => x.id === selected);
+    if (b) { b.taxonomy_label = name; b.taxonomy_category = category; }
+    document.querySelectorAll(".tax-item").forEach(el => el.classList.remove("applied"));
+    document.getElementById(`tax-${taxId}`)?.classList.add("applied");
+  }
+  renderAllBoxes();
+  renderBoxLists();
   toast(`Labelled as ${name}`);
 }
 
@@ -1435,6 +1464,11 @@ async function saveSpecify(finalise) {
   renderAllBoxes(); renderBoxLists();
   toast(finalise ? "Box finalised ✓" : "Draft saved");
 }
+
+async function finaliseAll() {
+  toast('Something must be done here.')
+}
+
 
 function updateRoutingSummary(labelled) {
   const el = document.getElementById("routing-summary");
