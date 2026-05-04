@@ -246,7 +246,7 @@ def api_boxes(request, image_id):
     role  = get_user_role(request.user)
 
     if request.method == "GET":
-        boxes = image.boxes.all()
+        boxes = image.boxes.select_related("taxonomy_label").all()
         return JsonResponse({"boxes": [b.to_dict() for b in boxes]})
 
     if request.method == "POST":
@@ -269,7 +269,7 @@ def api_boxes(request, image_id):
 def api_box_detail(request, image_id, box_id):
     """PATCH: update a box. DELETE: hard-delete."""
     image = get_object_or_404(AnalysisImage, pk=image_id)
-    box   = get_object_or_404(BoundingBox, pk=box_id, image=image)
+    box   = get_object_or_404(BoundingBox.objects.select_related("taxonomy_label"), pk=box_id, image=image)
     role  = get_user_role(request.user)
 
     if role not in ["annotator", "admin"]:
@@ -282,7 +282,7 @@ def api_box_detail(request, image_id, box_id):
                 setattr(box, field, data[field])
         if "source" in data:
             box.source = data["source"]
-        box.save()
+        box.save(update_fields=["x", "y", "width", "height", "source", "updated_at"])
         return JsonResponse(box.to_dict())
 
     if request.method == "DELETE":
@@ -304,7 +304,7 @@ def api_classify_box(request, image_id, box_id):
         return JsonResponse({"error": "Permission denied"}, status=403)
 
     image = get_object_or_404(AnalysisImage, pk=image_id)
-    box   = get_object_or_404(BoundingBox, pk=box_id, image=image)
+    box   = get_object_or_404(BoundingBox.objects.select_related("taxonomy_label"), pk=box_id, image=image)
     data  = json.loads(request.body)
 
     label_id = data.get("taxonomy_label_id")
@@ -313,7 +313,7 @@ def api_classify_box(request, image_id, box_id):
         box.taxonomy_label = label
     box.classified_by = request.user if request.user.is_authenticated else None
     box.classified_at = timezone.now()
-    box.save()
+    box.save(update_fields=["taxonomy_label", "classified_by", "classified_at"])
     return JsonResponse(box.to_dict())
 
 
@@ -407,7 +407,7 @@ def api_specify_box(request, image_id, box_id):
         return JsonResponse({"error": "Permission denied"}, status=403)
 
     image = get_object_or_404(AnalysisImage, pk=image_id)
-    box   = get_object_or_404(BoundingBox, pk=box_id, image=image)
+    box   = get_object_or_404(BoundingBox.objects.select_related("taxonomy_label"), pk=box_id, image=image)
     data  = json.loads(request.body)
 
     box.species_name     = data.get("species_name",     box.species_name)
@@ -415,7 +415,7 @@ def api_specify_box(request, image_id, box_id):
     box.is_finalized     = data.get("is_finalized",     box.is_finalized)
     box.specified_by     = request.user if request.user.is_authenticated else None
     box.specified_at     = timezone.now()
-    box.save()
+    box.save(update_fields=["species_name", "researcher_notes", "is_finalized", "specified_by", "specified_at"])
     return JsonResponse(box.to_dict())
 
 
@@ -430,7 +430,7 @@ def api_export(request, image_id):
         return JsonResponse({"error": "Permission denied"}, status=403)
 
     image = get_object_or_404(AnalysisImage, pk=image_id)
-    boxes = image.boxes.all()
+    boxes = list(image.boxes.select_related("taxonomy_label").all())
     payload = {
         "image_id":       str(image.id),
         "image_filename": image.original_filename,
@@ -438,9 +438,10 @@ def api_export(request, image_id):
         "boxes":          [b.to_dict() for b in boxes],
         "by_category":    {},
     }
-    for box in boxes.filter(is_finalized=True):
-        cat = box.taxonomy_label.category if box.taxonomy_label else "other"
-        payload["by_category"].setdefault(cat, []).append(box.to_dict())
+    for box in boxes:
+        if box.is_finalized:
+            cat = box.taxonomy_label.category if box.taxonomy_label else "other"
+            payload["by_category"].setdefault(cat, []).append(box.to_dict())
 
     return JsonResponse(payload)
 
