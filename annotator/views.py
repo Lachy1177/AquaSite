@@ -297,6 +297,7 @@ def api_box_detail(request, image_id, box_id):
 # API: classification
 # ---------------------------------------------------------------------------
 
+@login_required
 @require_POST
 def api_classify_box(request, image_id, box_id):
     """Assign a taxonomy label to a box."""
@@ -316,6 +317,7 @@ def api_classify_box(request, image_id, box_id):
     return JsonResponse(box.to_dict())
 
 
+@login_required
 @require_POST
 def api_classify_boxes(request, image_id, box_id):
     """Assign a taxonomy label to a box."""
@@ -421,6 +423,7 @@ def api_suggest_all(request, image_id):
 # API: specification (researcher finalisation)
 # ---------------------------------------------------------------------------
 
+@login_required
 @require_POST
 def api_specify_box(request, image_id, box_id):
     role = get_user_role(request.user)
