@@ -1,5 +1,6 @@
 import json
 import uuid
+from django.core.paginator import Paginator
 from django.db.models import Count
 from django.shortcuts import render, get_object_or_404, redirect
 from django.http import JsonResponse
@@ -69,7 +70,7 @@ def index(request):
     # ── Pipeline counts (all images, no filters) ─────────────────
     pipeline_counts = {
         row["status"]: row["count"]
-        for row in AnalysisImage.objects.values("status").annotate(count=Count("id"))
+        for row in AnalysisImage.objects.order_by().values("status").annotate(count=Count("id"))
     }
     # Ensure all stages always present
     for s in ("bound", "classify", "specify", "complete"):
@@ -93,16 +94,22 @@ def index(request):
         queue_count   = qs.count()
         next_in_queue = qs.first()
 
+    # ── Pagination (60 cards per page) ────────────────────────────
+    total_count = images.count()
+    paginator   = Paginator(images, 60)
+    page_obj    = paginator.get_page(request.GET.get("page", 1))
+
     return render(request, "annotator/index.html", {
-        "images":         images,
-        "clusters":       list(clusters),
-        "active_cluster": cluster_id,
-        "active_status":  active_status,
+        "page_obj":        page_obj,
+        "total_count":     total_count,
+        "clusters":        list(clusters),
+        "active_cluster":  cluster_id,
+        "active_status":   active_status,
         "pipeline_counts": pipeline_counts,
-        "role":           role,
-        "user_stage":     user_stage,
-        "next_in_queue":  next_in_queue,
-        "queue_count":    queue_count,
+        "role":            role,
+        "user_stage":      user_stage,
+        "next_in_queue":   next_in_queue,
+        "queue_count":     queue_count,
     })
 
 

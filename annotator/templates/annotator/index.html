@@ -364,6 +364,21 @@
   .upload-drop-title { font-family: var(--sans); font-size: 18px; font-weight: 700; color: var(--accent); margin-bottom: 8px; }
   .upload-drop-sub { font-size: 11px; color: var(--text-muted); }
 
+
+  /* ─── PAGINATION ──────────────────────────────────────────────── */
+  .pagination-bar {
+    display: flex; align-items: center; justify-content: center;
+    gap: 12px; padding: 8px 28px 32px;
+  }
+  .page-btn {
+    padding: 6px 16px; border-radius: 2px;
+    font-family: var(--mono); font-size: 11px; cursor: pointer;
+    background: var(--bg-panel); border: 1px solid var(--border);
+    color: var(--text-muted); text-decoration: none; transition: all 0.15s;
+  }
+  .page-btn:hover { border-color: var(--accent); color: var(--accent); }
+  .page-btn.disabled { opacity: 0.3; pointer-events: none; }
+  .page-info { font-size: 10px; color: var(--text-dim); }
   /* ─── SCROLLBAR ──────────────────────────────────────────────── */
   ::-webkit-scrollbar { width: 5px; height: 5px; }
   ::-webkit-scrollbar-track { background: transparent; }
@@ -487,7 +502,7 @@
     {% else %}All Images
     {% endif %}
   </span>
-  <span class="toolbar-count">{{ images.count }} image{{ images.count|pluralize:"s" }}</span>
+  <span class="toolbar-count">{{ total_count }} image{{ total_count|pluralize:"s" }}</span>
 
   {% if role == "annotator" or role == "admin" %}
   <button class="upload-trigger" onclick="document.getElementById('file-input').click()">
@@ -517,11 +532,11 @@
 {% endif %}
 
 <!-- ── IMAGE GRID ───────────────────────────────────────────────────── -->
-{% if images %}
+{% if page_obj %}
 <div class="image-grid">
-  {% for img in images %}
+  {% for img in page_obj %}
   <a class="image-card" href="{% url 'annotator:workspace' img.id img.status %}">
-    <img class="card-thumb" src="{{ img.image_url }}" alt="{{ img.original_filename }}" loading="lazy">
+    <img class="card-thumb" src="{{ img.thumbnail_url }}" alt="{{ img.original_filename }}" loading="lazy">
     <div class="card-body">
       <div class="card-name">{{ img.original_filename }}</div>
       <div class="card-meta">
@@ -562,6 +577,30 @@
 {% endif %}
 
 <!-- ─────────────────────────────────────────────────────────────────── -->
+
+<!-- ── PAGINATION ───────────────────────────────────────────────── -->
+{% if page_obj.paginator.num_pages > 1 %}
+<div class="pagination-bar">
+  {% if page_obj.has_previous %}
+  <a class="page-btn" href="?{% if active_status %}status={{ active_status }}&{% endif %}{% if active_cluster %}cluster={{ active_cluster }}&{% endif %}page={{ page_obj.previous_page_number }}">← Prev</a>
+  {% else %}
+  <span class="page-btn disabled">← Prev</span>
+  {% endif %}
+
+  <span class="page-info">
+    Page {{ page_obj.number }} of {{ page_obj.paginator.num_pages }}
+    &nbsp;·&nbsp;
+    {{ total_count }} total
+  </span>
+
+  {% if page_obj.has_next %}
+  <a class="page-btn" href="?{% if active_status %}status={{ active_status }}&{% endif %}{% if active_cluster %}cluster={{ active_cluster }}&{% endif %}page={{ page_obj.next_page_number }}">Next →</a>
+  {% else %}
+  <span class="page-btn disabled">Next →</span>
+  {% endif %}
+</div>
+{% endif %}
+
 <script>
 /* ── File upload ─────────────────────────────────────────────────── */
 async function uploadFile(input) {
