@@ -125,7 +125,7 @@ def upload_image(request):
         return JsonResponse({"error": "No file provided"}, status=400)
 
     image_id     = uuid.uuid4()
-    storage_path = f"analysis_images/{image_id}/{f.name}"
+    storage_path = f"uploaded-images/{image_id}/{f.name}"
 
     try:
         public_url = upload_image_to_supabase(f, storage_path)
@@ -481,8 +481,8 @@ def import_from_supabase(request):
     from django.conf import settings as cfg
 
     sb     = create_client(cfg.SUPABASE_URL, cfg.SUPABASE_KEY)
-    bucket = "dive-videos"
-    folder = "analysis_images"
+    bucket = cfg.SUPABASE_IMAGES_BUCKET
+    folder = "dino-images"
 
     existing_urls = set(AnalysisImage.objects.values_list("image_url", flat=True))
 
