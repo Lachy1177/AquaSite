@@ -1410,7 +1410,7 @@ function refreshTaxHighlight(b) {
 async function applyLabel(taxId, name, category) {
   if (!CAN_CLASSIFY) { toast("You do not have permission to classify boxes"); return; }
   if (!selectedId) { toast("Select a box first"); return; }
-  const data = await api(`boxes/${selectedBoxes[0]}/classify_many/`, "POST", {
+  const data = await api(`classify_many/`, "POST", {
     taxonomy_label_id: taxId, Attached: selectedBoxes });
   for (selected of selectedBoxes) {
     const b = boxes.find(x => x.id === selected);
