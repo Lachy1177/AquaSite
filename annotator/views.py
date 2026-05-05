@@ -327,17 +327,15 @@ def api_classify_boxes(request, image_id):
     image = get_object_or_404(AnalysisImage, pk=image_id)
     data  = json.loads(request.body)
     label_id = data.get("taxonomy_label_id")
-    boxes = data.get("Attached") or []
-    if not boxes:
+    box_ids = data.get("Attached") or []
+    if not box_ids:
         return JsonResponse({"error": "No box IDs provided"}, status=400)
-    for box_id in boxes:
-        box = get_object_or_404(BoundingBox.objects.select_related("taxonomy_label"), pk=box_id, image=image)
-        if label_id:
-            label = get_object_or_404(TaxonomyLabel, pk=label_id)
-            box.taxonomy_label = label
-        box.classified_by = request.user if request.user.is_authenticated else None
-        box.classified_at = timezone.now()
-        box.save(update_fields=["taxonomy_label", "classified_by", "classified_at"])
+    label = get_object_or_404(TaxonomyLabel, pk=label_id) if label_id else None
+    BoundingBox.objects.filter(pk__in=box_ids, image=image).update(
+        taxonomy_label=label,
+        classified_by=request.user,
+        classified_at=timezone.now(),
+    )
     return JsonResponse({"status": "ok"})
 
 
