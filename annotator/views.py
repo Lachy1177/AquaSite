@@ -67,7 +67,12 @@ def index(request):
             images = images.filter(cluster_id=int(cluster_id))
         except ValueError:
             cluster_id = ""
-
+     # ── Category filter ──────────────────────────────────────────
+    active_category = request.GET.get("category", "")
+    if active_category:
+        images = images.filter(
+            boxes__taxonomy_label__category=active_category
+        ).distinct()
     # ── Pipeline counts (all images, no filters) ─────────────────
     pipeline_counts = {
         row["status"]: row["count"]
@@ -100,17 +105,27 @@ def index(request):
     paginator   = Paginator(images, 60)
     page_obj    = paginator.get_page(request.GET.get("page", 1))
 
+    CATEGORIES = [
+        ("fish",          "Fish"),
+        ("coral",         "Coral"),
+        ("invertebrate",  "Invertebrate"),
+        ("algae",         "Algae"),
+        ("other",         "Other"),
+    ]
+
     return render(request, "annotator/index.html", {
         "page_obj":        page_obj,
         "total_count":     total_count,
         "clusters":        list(clusters),
         "active_cluster":  cluster_id,
         "active_status":   active_status,
+        "active_category": active_category,
         "pipeline_counts": pipeline_counts,
         "role":            role,
         "user_stage":      user_stage,
         "next_in_queue":   next_in_queue,
         "queue_count":     queue_count,
+        "categories":      CATEGORIES,
     })
 
 

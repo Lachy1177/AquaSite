@@ -530,6 +530,19 @@
   {% endfor %}
 </div>
 {% endif %}
+<!-- ── CATEGORY CHIPS ──────────────────────────────────────────────── -->
+<div class="cluster-section">
+  <span class="cluster-label">Category</span>
+  <a class="chip {% if not active_category %}active{% endif %}"
+     href="?{% if active_status %}status={{ active_status }}&{% endif %}{% if active_cluster %}cluster={{ active_cluster }}&{% endif %}">All</a>
+  {% for cat, label in categories %}
+  <a class="chip {% if active_category == cat %}active{% endif %}"
+     href="?{% if active_status %}status={{ active_status }}&{% endif %}{% if active_cluster %}cluster={{ active_cluster }}&{% endif %}category={{ cat }}"
+     style="--chip-color: {{ cat|lower }}">
+    {{ label }}
+  </a>
+  {% endfor %}
+</div>
 
 <!-- ── IMAGE GRID ───────────────────────────────────────────────────── -->
 {% if page_obj %}
