@@ -105,6 +105,12 @@ def api_boxes(request, image_id):
             return JsonResponse({"error": "Permission denied"}, status=403)
 
         data = json.loads(request.body)
+        
+        required_fields = ["x", "y", "width", "height"]
+        for field in required_fields:
+            if field not in data:
+                return JsonResponse({"error": f"Missing field: {field}"}, status=400)
+            
         box = BoundingBox.objects.create(
             image=image,
             x=data["x"],
