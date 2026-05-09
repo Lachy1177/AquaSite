@@ -1,0 +1,298 @@
+{% load static %}
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>AS · Marine Image Annotator</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@300;400;500;600&family=Syne:wght@400;600;700;800&display=swap" rel="stylesheet">
+<style>
+:root {
+  --bg:#1e1e1e; --bg-alt:#1a1a1a; --bg-mid:#252525; --bg-panel:#2a2a2a;
+  --bg-hover:#323232; --border:#3a3a3a; --border-hi:#505050;
+  --text:#d4d4d4; --text-muted:#7a7a7a; --text-dim:#555;
+  --accent:#4a9eff; --amber:#f5a623; --green:#4ecb71;
+  --mono:'JetBrains Mono', monospace; --sans:'Syne', sans-serif;
+}
+*,*::before,*::after { box-sizing:border-box; margin:0; padding:0; }
+html { scroll-behavior:smooth; }
+body { background:var(--bg); color:var(--text); font-family:var(--mono); font-size:12px; line-height:1.5; min-height:100vh; }
+a { color:inherit; text-decoration:none; }
+ul { list-style:none; }
+::-webkit-scrollbar { width:6px; height:6px; }
+::-webkit-scrollbar-track { background:transparent; }
+::-webkit-scrollbar-thumb { background:var(--border-hi); border-radius:3px; }
+
+.container { max-width:1100px; margin:0 auto; padding:0 28px; }
+.accent { color:var(--accent); }
+.amber { color:var(--amber); }
+
+.btn { display:inline-flex; align-items:center; gap:6px; padding:10px 20px; border-radius:2px; font-family:var(--sans); font-weight:700; font-size:13px; cursor:pointer; border:1px solid transparent; transition:all .15s; white-space:nowrap; }
+.btn-primary { background:var(--accent); color:#000; }
+.btn-primary:hover { opacity:.85; }
+.btn-outline { border-color:var(--border-hi); color:var(--text); background:none; font-family:var(--mono); font-weight:400; font-size:12px; }
+.btn-outline:hover { border-color:var(--accent); color:var(--accent); }
+.btn-ghost { border:1px solid var(--border-hi); color:var(--text-muted); font-family:var(--mono); font-weight:400; font-size:10px; padding:6px 14px; }
+.btn-ghost:hover { border-color:var(--accent); color:var(--accent); }
+.btn-lg { padding:13px 24px; }
+
+.nav { position:sticky; top:0; z-index:50; height:52px; border-bottom:1px solid var(--border); background:rgba(37,37,37,.95); backdrop-filter:blur(8px); padding:0 28px; display:flex; align-items:center; gap:16px; }
+.logo { font-family:var(--sans); font-size:22px; font-weight:800; letter-spacing:-.5px; color:var(--text); }
+.logo-a { color:var(--accent); }
+.nav-sub { color:var(--text-muted); font-size:10px; letter-spacing:.5px; flex:1; }
+.nav-links { display:none; align-items:center; gap:24px; font-size:11px; color:var(--text-muted); }
+.nav-links a:hover { color:var(--accent); }
+@media (min-width:768px) { .nav-links { display:flex; } }
+@media (max-width:640px) { .nav-sub { display:none; } }
+
+.hero { position:relative; overflow:hidden; border-bottom:1px solid var(--border); }
+.hero-bg-gradient { position:absolute; inset:0; pointer-events:none; opacity:.3; background:radial-gradient(circle at 20% 30%, #1a3d6e 0%, transparent 40%), radial-gradient(circle at 80% 70%, #1a2e1a 0%, transparent 40%); }
+.hero-bg-grid { position:absolute; inset:0; pointer-events:none; opacity:.04; background-image:linear-gradient(var(--accent) 1px, transparent 1px), linear-gradient(90deg, var(--accent) 1px, transparent 1px); background-size:40px 40px; }
+.hero-inner { position:relative; padding:96px 28px; }
+@media (min-width:768px) { .hero-inner { padding:128px 28px; } }
+.hero-title { font-family:var(--sans); font-weight:800; color:var(--text); letter-spacing:-1px; line-height:1.05; font-size:clamp(40px,6vw,72px); max-width:900px; }
+.hero-actions { margin-top:40px; display:flex; flex-wrap:wrap; align-items:center; gap:12px; }
+.hero-note { font-size:10px; color:var(--text-dim); letter-spacing:.5px; margin-left:8px; }
+
+.stats { margin-top:64px; display:grid; grid-template-columns:repeat(2,1fr); gap:1px; background:var(--border); border:1px solid var(--border); border-radius:2px; overflow:hidden; max-width:720px; }
+@media (min-width:768px) { .stats { grid-template-columns:repeat(4,1fr); } }
+.stat { background:var(--bg-mid); padding:20px; }
+.stat-v { font-family:var(--sans); font-weight:700; font-size:24px; color:var(--accent); }
+.stat-l { font-size:10px; color:var(--text-muted); text-transform:uppercase; letter-spacing:1px; margin-top:4px; }
+
+.section { border-bottom:1px solid var(--border); padding:96px 0; }
+.section-alt { background:var(--bg-alt); }
+.eyebrow { font-size:10px; color:var(--text-muted); text-transform:uppercase; letter-spacing:2px; margin-bottom:12px; }
+.eyebrow-accent { color:var(--accent); }
+.section-title { font-family:var(--sans); font-weight:800; letter-spacing:-.5px; color:var(--text); font-size:clamp(28px,4vw,44px); max-width:720px; line-height:1.1; }
+.section-lead { margin-top:16px; max-width:640px; color:var(--text-muted); font-size:13px; line-height:1.7; }
+
+.pipeline-grid { margin-top:56px; display:grid; grid-template-columns:1fr; gap:16px; }
+@media (min-width:640px) { .pipeline-grid { grid-template-columns:repeat(2,1fr); } }
+@media (min-width:1024px) { .pipeline-grid { grid-template-columns:repeat(4,1fr); } }
+.stage-card { background:var(--bg-panel); border:1px solid var(--border); border-radius:2px; padding:24px; transition:border-color .15s; }
+.stage-card:hover { border-color:var(--c); }
+.stage-header { display:flex; align-items:center; justify-content:space-between; margin-bottom:20px; }
+.stage-icon { width:40px; height:40px; border-radius:50%; display:flex; align-items:center; justify-content:center; font-size:18px; background:var(--bg); border:1px solid var(--c); color:var(--c); }
+.stage-num { font-size:9px; color:var(--text-dim); letter-spacing:1px; }
+.stage-label { font-family:var(--sans); font-weight:700; font-size:18px; color:var(--c); letter-spacing:-.3px; }
+.stage-role { font-size:10px; text-transform:uppercase; letter-spacing:1px; color:var(--text-muted); margin-top:4px; }
+.stage-desc { margin-top:16px; color:var(--text); font-size:12px; line-height:1.7; }
+
+.features-grid { margin-top:56px; display:grid; grid-template-columns:1fr; gap:1px; background:var(--border); border:1px solid var(--border); border-radius:2px; overflow:hidden; }
+@media (min-width:640px) { .features-grid { grid-template-columns:repeat(2,1fr); } }
+@media (min-width:1024px) { .features-grid { grid-template-columns:repeat(4,1fr); } }
+.feature { background:var(--bg-mid); padding:24px; transition:background .15s; }
+.feature:hover { background:var(--bg-panel); }
+.feature-icon { font-size:20px; margin-bottom:14px; }
+.feature-title { font-family:var(--sans); font-weight:700; color:var(--text); font-size:14px; }
+.feature p { margin-top:8px; color:var(--text-muted); font-size:11px; line-height:1.7; }
+
+.roles-grid { margin-top:56px; display:grid; grid-template-columns:1fr; gap:12px; }
+@media (min-width:640px) { .roles-grid { grid-template-columns:repeat(2,1fr); } }
+@media (min-width:1024px) { .roles-grid { grid-template-columns:repeat(5,1fr); } }
+.role-card { background:var(--bg-panel); border:1px solid var(--border); border-radius:2px; padding:20px; transition:transform .15s; }
+.role-card:hover { transform:translateY(-2px); }
+.role-badge { display:inline-block; padding:2px 8px; border-radius:2px; font-family:var(--sans); font-weight:700; font-size:10px; text-transform:uppercase; letter-spacing:1px; background:color-mix(in srgb, var(--c) 15%, transparent); color:var(--c); }
+.role-card ul { margin-top:16px; display:flex; flex-direction:column; gap:8px; }
+.role-card li { display:flex; gap:8px; color:var(--text); font-size:11px; line-height:1.5; }
+.role-card li::before { content:"›"; color:var(--c); }
+
+.tax-grid { margin-top:56px; display:flex; flex-wrap:wrap; gap:12px; }
+.tax-card { background:var(--bg-panel); border:1px solid var(--border); border-radius:2px; padding:16px 20px 16px 16px; display:flex; align-items:center; gap:16px; min-width:260px; flex:1 1 260px; }
+.tax-swatch { width:40px; height:40px; border-radius:2px; flex-shrink:0; background:color-mix(in srgb, var(--c) 25%, transparent); border:1px solid var(--c); }
+.tax-cat { font-family:var(--sans); font-weight:700; font-size:12px; text-transform:uppercase; letter-spacing:1px; color:var(--c); }
+.tax-ex { font-size:10px; color:var(--text-muted); margin-top:4px; }
+
+.cta { position:relative; overflow:hidden; padding-top:112px; }
+.cta-bg { position:absolute; inset:0; pointer-events:none; background:radial-gradient(circle at 50% 50%, rgba(74,158,255,.15) 0%, transparent 60%); }
+.cta-inner { position:relative; text-align:center; max-width:720px; }
+.cta-title { font-family:var(--sans); font-weight:800; letter-spacing:-1px; color:var(--text); font-size:clamp(32px,5vw,56px); line-height:1.05; }
+.cta-lead { margin:24px auto 0; max-width:540px; color:var(--text-muted); font-size:13px; line-height:1.7; }
+.cta-actions { margin-top:40px; display:flex; flex-wrap:wrap; justify-content:center; gap:12px; }
+
+.footer { margin-top:80px; border-top:1px solid var(--border); padding:32px 0; }
+.footer-inner { display:flex; flex-wrap:wrap; align-items:center; justify-content:space-between; gap:16px; }
+.footer-brand { display:flex; align-items:center; gap:12px; }
+.footer-brand .logo { font-size:18px; }
+.footer-sub { font-size:10px; color:var(--text-dim); letter-spacing:.5px; }
+.footer-links { display:flex; gap:20px; font-size:10px; color:var(--text-muted); }
+.footer-links a:hover { color:var(--accent); }
+</style>
+</head>
+<body>
+
+<header class="nav">
+  <a href="#" class="logo"><span class="logo-a">A</span><span>S</span></a>
+  <span class="nav-sub">Marine Image Annotator · Aquatic Sciences</span>
+  <nav class="nav-links">
+    <a href="#pipeline">Pipeline</a>
+    <a href="#features">Features</a>
+    <a href="#roles">Roles</a>
+    <a href="#taxonomy">Taxonomy</a>
+  </nav>
+  <a href="/login/" class="btn btn-ghost">Sign in</a>
+</header>
+
+<section class="hero">
+  <div class="hero-bg-gradient"></div>
+  <div class="hero-bg-grid"></div>
+  <div class="container hero-inner">
+    <h1 class="hero-title">
+      Annotate the ocean,<br>
+      <span class="accent">box</span> by <span class="amber">box</span>.
+    </h1>
+    <div class="hero-actions">
+      <a href="/login/" class="btn btn-primary">Start Annotating →</a>
+      <a href="#pipeline" class="btn btn-outline">See the pipeline</a>
+      <span class="hero-note">⌘ Built for marine research workflows</span>
+    </div>
+    <div class="stats">
+      <div class="stat"><div class="stat-v">4</div><div class="stat-l">pipeline stages</div></div>
+      <div class="stat"><div class="stat-v">5</div><div class="stat-l">role-based views</div></div>
+      <div class="stat"><div class="stat-v">DINOv3</div><div class="stat-l">AI classification</div></div>
+      <div class="stat"><div class="stat-v">JSON</div><div class="stat-l">research export</div></div>
+    </div>
+  </div>
+</section>
+
+<section id="pipeline" class="section">
+  <div class="container">
+    <div class="eyebrow">// The Pipeline</div>
+    <h2 class="section-title">Four stages, one production line.</h2>
+    <p class="section-lead">Each image moves through a dedicated stage. Specialists pick up where the previous role left off — no context-switching, no email chains.</p>
+    <div class="pipeline-grid">
+      <div class="stage-card" style="--c:#4a9eff">
+        <div class="stage-header"><div class="stage-icon">⬡</div><span class="stage-num">STAGE 01</span></div>
+        <div class="stage-label">Bounding</div>
+        <div class="stage-role">Annotator</div>
+        <p class="stage-desc">Draw, drag, and resize bounding boxes over regions of interest. Keyboard shortcuts (V / D / E) keep your hands on the canvas.</p>
+      </div>
+      <div class="stage-card" style="--c:#f5a623">
+        <div class="stage-header"><div class="stage-icon">◈</div><span class="stage-num">STAGE 02</span></div>
+        <div class="stage-label">Classifying</div>
+        <div class="stage-role">Classifier</div>
+        <p class="stage-desc">DINOv3 suggests a top-K taxonomy in real time. Accept the AI label or pick from the taxonomy panel — batch-classify a whole image in one click.</p>
+      </div>
+      <div class="stage-card" style="--c:#ce93d8">
+        <div class="stage-header"><div class="stage-icon">◎</div><span class="stage-num">STAGE 03</span></div>
+        <div class="stage-label">Specifying</div>
+        <div class="stage-role">Researcher</div>
+        <p class="stage-desc">Drill down to species level. Add identification notes, confidence flags, and finalise observations one box at a time.</p>
+      </div>
+      <div class="stage-card" style="--c:#4ecb71">
+        <div class="stage-header"><div class="stage-icon">✓</div><span class="stage-num">STAGE 04</span></div>
+        <div class="stage-label">Complete</div>
+        <div class="stage-role">Export</div>
+        <p class="stage-desc">Finalised images export to clean JSON — ready to feed downstream models, papers, or shared with collaborators.</p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<section id="features" class="section section-alt">
+  <div class="container">
+    <div class="eyebrow">// What's inside</div>
+    <h2 class="section-title">Built for the way marine teams actually work.</h2>
+    <div class="features-grid">
+      <div class="feature"><div class="feature-icon" style="color:#4a9eff">✦</div><div class="feature-title">DINOv3 in the loop</div><p>Top-K AI suggestions per box, batch-classify entire images, toggle auto-suggest off when you want pure manual control.</p></div>
+      <div class="feature"><div class="feature-icon" style="color:#f5a623">▢</div><div class="feature-title">Precision boxing</div><p>Draw, drag, resize from any handle. Per-box opacity slider keeps the underlying imagery legible while you work.</p></div>
+      <div class="feature"><div class="feature-icon" style="color:#ce93d8">◉</div><div class="feature-title">Role-based queues</div><p>Annotators, classifiers, researchers, viewers, and admins each see only the work that needs them — with per-role queue counts.</p></div>
+      <div class="feature"><div class="feature-icon" style="color:#4ecb71">⬢</div><div class="feature-title">Supabase ingest</div><p>One-click import from your Supabase storage bucket. Skip duplicates, track imported counts, keep your gallery in sync.</p></div>
+      <div class="feature"><div class="feature-icon" style="color:#29b6f6">≡</div><div class="feature-title">Cluster &amp; category filters</div><p>Slice the gallery by cluster, taxonomy category, or pipeline stage. Find the next image to work on in seconds.</p></div>
+      <div class="feature"><div class="feature-icon" style="color:#81c784">↧</div><div class="feature-title">Research-ready JSON</div><p>Researchers and admins export finalised annotations as clean JSON — directly consumable by downstream ML pipelines.</p></div>
+      <div class="feature"><div class="feature-icon" style="color:#ff7043">⌨</div><div class="feature-title">Keyboard-first</div><p>V to select, D to draw, E to erase, Esc to deselect, Delete to remove. The canvas stays under your cursor.</p></div>
+      <div class="feature"><div class="feature-icon" style="color:#90a4ae">⌖</div><div class="feature-title">Routing summary</div><p>A live per-image breakdown of category counts and finalisation status, so researchers always know what is left.</p></div>
+    </div>
+  </div>
+</section>
+
+<section id="roles" class="section">
+  <div class="container">
+    <div class="eyebrow">// Roles</div>
+    <h2 class="section-title">Five roles. Zero overlap.</h2>
+    <p class="section-lead">Permissions are enforced end-to-end. Each user sees only the controls that belong to their role, keeping the pipeline focused and the data clean.</p>
+    <div class="roles-grid">
+      <div class="role-card" style="--c:#4a9eff"><span class="role-badge">Annotator</span><ul><li>Upload images</li><li>Draw bounding boxes</li><li>Submit to Classify</li></ul></div>
+      <div class="role-card" style="--c:#f5a623"><span class="role-badge">Classifier</span><ul><li>DINOv3 AI suggestions</li><li>Apply taxonomy labels</li><li>Batch classify</li></ul></div>
+      <div class="role-card" style="--c:#ce93d8"><span class="role-badge">Researcher</span><ul><li>Specify species</li><li>Add field notes</li><li>Finalise &amp; Export JSON</li></ul></div>
+      <div class="role-card" style="--c:#4ecb71"><span class="role-badge">Admin</span><ul><li>Full pipeline access</li><li>User management</li><li>Supabase import</li></ul></div>
+      <div class="role-card" style="--c:#90a4ae"><span class="role-badge">Viewer</span><ul><li>Read-only gallery</li><li>Inspect annotations</li><li>No edits</li></ul></div>
+    </div>
+  </div>
+</section>
+
+<section id="taxonomy" class="section section-alt">
+  <div class="container">
+    <div class="eyebrow">// Taxonomy</div>
+    <h2 class="section-title">A taxonomy tuned for the reef.</h2>
+    <p class="section-lead">Five top-level categories, color-coded across every panel and overlay, extensible from the admin dashboard.</p>
+    <div class="tax-grid">
+      <div class="tax-card" style="--c:#ff7043"><div class="tax-swatch"></div><div><div class="tax-cat">Coral</div><div class="tax-ex">Acropora · Porites · Montipora</div></div></div>
+      <div class="tax-card" style="--c:#29b6f6"><div class="tax-swatch"></div><div><div class="tax-cat">Fish</div><div class="tax-ex">Pomacentridae · Labridae · Chaetodontidae</div></div></div>
+      <div class="tax-card" style="--c:#ce93d8"><div class="tax-swatch"></div><div><div class="tax-cat">Invertebrate</div><div class="tax-ex">Echinoderms · Crustaceans · Molluscs</div></div></div>
+      <div class="tax-card" style="--c:#81c784"><div class="tax-swatch"></div><div><div class="tax-cat">Algae</div><div class="tax-ex">Halimeda · Sargassum · Turbinaria</div></div></div>
+      <div class="tax-card" style="--c:#90a4ae"><div class="tax-swatch"></div><div><div class="tax-cat">Other</div><div class="tax-ex">Substrate · Sand · Unknown</div></div></div>
+    </div>
+  </div>
+</section>
+
+<section class="cta">
+  <div class="cta-bg"></div>
+  <div class="container cta-inner">
+    <div class="eyebrow eyebrow-accent">⬡ Ready when you are</div>
+    <h2 class="cta-title">Turn raw underwater imagery into <span class="accent">research-ready data</span>.</h2>
+    <p class="cta-lead">Sign in with your lab account to start uploading. Your team's pipeline, queues, and taxonomy are pre-configured.</p>
+    <div class="cta-actions">
+      <a href="/login/" class="btn btn-primary btn-lg">Sign in to AS →</a>
+      <a href="/login/" class="btn btn-outline btn-lg">Get Started</a>
+    </div>
+  </div>
+  <footer class="footer">
+    <div class="container footer-inner">
+      <div class="footer-brand">
+        <span class="logo"><span class="logo-a">A</span><span>S</span></span>
+        <span class="footer-sub">Marine Image Annotator · Aquatic Sciences</span>
+      </div>
+      <div class="footer-links">
+        <a href="#pipeline">Pipeline</a>
+        <a href="#features">Features</a>
+        <a href="#roles">Roles</a>
+        <a href="/login/">Sign in</a>
+      </div>
+    </div>
+  </footer>
+</section>
+
+<script>
+(function () {
+  "use strict";
+
+  document.querySelectorAll('a[href^="#"]').forEach(function (link) {
+    link.addEventListener("click", function (e) {
+      var hash = link.getAttribute("href");
+      if (!hash || hash === "#") return;
+      var target = document.querySelector(hash);
+      if (!target) return;
+      e.preventDefault();
+      var nav = document.querySelector(".nav");
+      var offset = nav ? nav.offsetHeight : 0;
+      var top = target.getBoundingClientRect().top + window.pageYOffset - offset;
+      window.scrollTo({ top: top, behavior: "smooth" });
+    });
+  });
+
+  var nav = document.querySelector(".nav");
+  if (nav) {
+    var onScroll = function () {
+      nav.style.boxShadow = window.scrollY > 8 ? "0 1px 0 rgba(0,0,0,.4)" : "none";
+    };
+    window.addEventListener("scroll", onScroll, { passive: true });
+    onScroll();
+  }
+})();
+</script>
+</body>
+</html>
