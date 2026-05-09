@@ -210,7 +210,7 @@ def main():
     created = 0
     for i, (frame_path, cid) in enumerate(selected):
         filename = f"frame_{uuid.uuid4().hex}.jpg"
-        storage_path = f"analysis_images/{filename}"
+        storage_path = f"dino-images/{filename}"
 
         if args.mode in ("db", "both"):
             try:

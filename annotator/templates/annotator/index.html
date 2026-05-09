@@ -6,59 +6,281 @@
 <title>AS · Marine Image Analysis</title>
 <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@300;400;500&family=Syne:wght@400;700;800&display=swap" rel="stylesheet">
 <style>
+  /* ─── TOKENS ──────────────────────────────────────────────────── */
   :root {
-    --bg: #1e1e1e; --bg-mid: #252525; --bg-panel: #2a2a2a;
-    --border: #3a3a3a; --text: #d4d4d4; --text-muted: #7a7a7a;
-    --accent: #4a9eff; --accent-dim: #1d4e8f;
-    --green: #4ecb71; --mono: 'JetBrains Mono',monospace; --sans: 'Syne',sans-serif;
+    --bg:         #1e1e1e;
+    --bg-mid:     #252525;
+    --bg-panel:   #2a2a2a;
+    --bg-hover:   #323232;
+    --border:     #3a3a3a;
+    --border-hi:  #505050;
+    --text:       #d4d4d4;
+    --text-muted: #7a7a7a;
+    --text-dim:   #444;
+    --accent:     #4a9eff;
+    --accent-dim: #1a3d6e;
+    --green:      #4ecb71;
+    --amber:      #f5a623;
+    --purple:     #ce93d8;
+    --mono:       'JetBrains Mono', monospace;
+    --sans:       'Syne', sans-serif;
   }
-  * { box-sizing: border-box; margin: 0; padding: 0; }
-  body { background: var(--bg); color: var(--text); font-family: var(--mono); font-size: 13px; min-height: 100vh; }
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
+    background: var(--bg);
+    color: var(--text);
+    font-family: var(--mono);
+    font-size: 12px;
+    min-height: 100vh;
+  }
 
+  /* ─── HEADER ─────────────────────────────────────────────────── */
   .header {
+    height: 52px;
     border-bottom: 1px solid var(--border);
-    padding: 14px 32px;
-    display: flex; align-items: center; gap: 16px;
+    padding: 0 28px;
+    display: flex;
+    align-items: center;
+    gap: 14px;
     background: var(--bg-mid);
+    flex-shrink: 0;
   }
-  .logo { font-family: var(--sans); font-size: 22px; font-weight: 800; text-decoration: none; color: var(--text); cursor: pointer; }
-  .logo .a { color: var(--accent); }
-  .subtitle { color: var(--text-muted); font-size: 11px; flex: 1; }
-
-  .upload-area {
-    margin: 32px auto;
-    max-width: 560px;
-    border: 2px dashed var(--border);
-    border-radius: 6px;
-    padding: 40px;
-    text-align: center;
-    cursor: pointer;
-    transition: border-color 0.2s;
-  }
-  .upload-area:hover { border-color: var(--accent); }
-  .upload-area input { display: none; }
-  .upload-title { font-family: var(--sans); font-size: 16px; font-weight: 700; margin-bottom: 8px; }
-  .upload-sub { color: var(--text-muted); font-size: 11px; }
-  .upload-btn {
-    margin-top: 16px;
-    display: inline-block;
-    padding: 8px 24px;
-    background: var(--accent);
-    color: #000;
-    border-radius: 3px;
+  .logo {
     font-family: var(--sans);
-    font-weight: 700;
-    font-size: 13px;
+    font-size: 22px;
+    font-weight: 800;
+    text-decoration: none;
+    color: var(--text);
+    letter-spacing: -0.5px;
+  }
+  .logo .a { color: var(--accent); }
+  .header-sub {
+    color: var(--text-muted);
+    font-size: 10px;
+    letter-spacing: 0.5px;
+    flex: 1;
+  }
+  .header-btn {
+    background: none;
+    border: 1px solid var(--border-hi);
+    color: var(--text-muted);
+    padding: 5px 14px;
+    border-radius: 2px;
+    font-family: var(--mono);
+    font-size: 10px;
     cursor: pointer;
+    transition: all 0.15s;
+    text-decoration: none;
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+    white-space: nowrap;
+  }
+  .header-btn:hover { border-color: var(--accent); color: var(--accent); }
+
+  /* ─── PIPELINE STRIP ─────────────────────────────────────────── */
+  .pipeline-strip {
+    background: var(--bg-mid);
+    border-bottom: 1px solid var(--border);
+    padding: 0 28px;
+    display: flex;
+    align-items: stretch;
+    gap: 0;
+    height: 56px;
+    overflow-x: auto;
+  }
+  .pipeline-stage {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 0 20px;
+    cursor: pointer;
+    text-decoration: none;
+    color: var(--text-muted);
+    border-bottom: 2px solid transparent;
+    transition: all 0.15s;
+    white-space: nowrap;
+    position: relative;
+  }
+  .pipeline-stage:hover { color: var(--text); background: var(--bg-hover); }
+  .pipeline-stage.active { color: var(--text); border-bottom-color: var(--stage-color, var(--accent)); }
+  .pipeline-stage::after {
+    content: "›";
+    position: absolute;
+    right: -5px;
+    color: var(--text-dim);
+    font-size: 16px;
+    font-weight: 300;
+    pointer-events: none;
+    z-index: 1;
+  }
+  .pipeline-stage:last-child::after { display: none; }
+
+  .stage-icon {
+    width: 28px;
+    height: 28px;
+    border-radius: 50%;
+    background: var(--bg-hover);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 13px;
+    flex-shrink: 0;
+    border: 1.5px solid var(--border);
+    transition: all 0.15s;
+  }
+  .pipeline-stage.active .stage-icon {
+    background: color-mix(in srgb, var(--stage-color, var(--accent)) 15%, transparent);
+    border-color: var(--stage-color, var(--accent));
+  }
+  .stage-info { display: flex; flex-direction: column; gap: 2px; }
+  .stage-label {
+    font-family: var(--sans);
+    font-size: 12px;
+    font-weight: 700;
+    letter-spacing: 0.3px;
+    color: inherit;
+  }
+  .stage-count {
+    font-size: 10px;
+    color: var(--text-muted);
+  }
+  .stage-count strong {
+    color: var(--stage-color, var(--accent));
+    font-weight: 500;
   }
 
-  .image-grid {
-    max-width: 1200px;
-    margin: 0 auto;
-    padding: 0 32px 40px;
-    display: grid;
-    grid-template-columns: repeat(auto-fill, minmax(240px, 1fr));
+  /* Stage-specific colours */
+  .stage-bound    { --stage-color: var(--accent); }
+  .stage-classify { --stage-color: var(--amber); }
+  .stage-specify  { --stage-color: var(--purple); }
+  .stage-complete { --stage-color: var(--green); }
+
+  /* ─── QUEUE CALLOUT (role-specific shortcut) ─────────────────── */
+  .queue-callout {
+    margin: 20px 28px 0;
+    background: linear-gradient(90deg, #1a2e1a 0%, #1a2520 100%);
+    border: 1px solid #2a4a2a;
+    border-radius: 4px;
+    padding: 14px 18px;
+    display: flex;
+    align-items: center;
     gap: 16px;
+  }
+  .queue-callout-icon { font-size: 20px; flex-shrink: 0; }
+  .queue-callout-text { flex: 1; }
+  .queue-callout-title {
+    font-family: var(--sans);
+    font-size: 13px;
+    font-weight: 700;
+    color: var(--green);
+    margin-bottom: 2px;
+  }
+  .queue-callout-sub { font-size: 10px; color: var(--text-muted); }
+  .queue-start-btn {
+    background: var(--green);
+    border: none;
+    color: #000;
+    padding: 8px 20px;
+    border-radius: 2px;
+    font-family: var(--sans);
+    font-size: 12px;
+    font-weight: 700;
+    cursor: pointer;
+    text-decoration: none;
+    display: inline-block;
+    white-space: nowrap;
+    transition: opacity 0.15s;
+    flex-shrink: 0;
+  }
+  .queue-start-btn:hover { opacity: 0.85; }
+  .queue-start-btn.empty {
+    background: var(--bg-hover);
+    color: var(--text-muted);
+    cursor: default;
+    pointer-events: none;
+  }
+
+  /* ─── TOOLBAR ROW (upload + filters) ────────────────────────── */
+  .toolbar-row {
+    padding: 16px 28px 0;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    flex-wrap: wrap;
+  }
+  .toolbar-title {
+    font-family: var(--sans);
+    font-size: 12px;
+    font-weight: 700;
+    color: var(--text-muted);
+    text-transform: uppercase;
+    letter-spacing: 1px;
+    flex: 1;
+    min-width: 120px;
+  }
+  .toolbar-count {
+    font-size: 10px;
+    color: var(--text-dim);
+  }
+
+  /* Upload button */
+  .upload-trigger {
+    background: var(--accent);
+    border: none;
+    color: #000;
+    padding: 7px 18px;
+    border-radius: 2px;
+    font-family: var(--sans);
+    font-size: 12px;
+    font-weight: 700;
+    cursor: pointer;
+    transition: opacity 0.15s;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+  }
+  .upload-trigger:hover { opacity: 0.85; }
+
+  /* Cluster chips */
+  .cluster-section {
+    padding: 12px 28px 0;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    flex-wrap: wrap;
+  }
+  .cluster-label {
+    font-size: 9px;
+    text-transform: uppercase;
+    letter-spacing: 1px;
+    color: var(--text-dim);
+    margin-right: 4px;
+  }
+  .chip {
+    padding: 4px 12px;
+    border-radius: 2px;
+    font-family: var(--mono);
+    font-size: 10px;
+    cursor: pointer;
+    background: var(--bg-panel);
+    border: 1px solid var(--border);
+    color: var(--text-muted);
+    text-decoration: none;
+    transition: all 0.12s;
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+  }
+  .chip:hover { border-color: var(--border-hi); color: var(--text); }
+  .chip.active { background: var(--accent-dim); border-color: var(--accent); color: var(--accent); }
+
+  /* ─── IMAGE GRID ─────────────────────────────────────────────── */
+  .image-grid {
+    padding: 16px 28px 40px;
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+    gap: 14px;
   }
   .image-card {
     background: var(--bg-panel);
@@ -66,119 +288,378 @@
     border-radius: 4px;
     overflow: hidden;
     cursor: pointer;
-    transition: border-color 0.15s;
+    transition: border-color 0.15s, transform 0.1s;
     text-decoration: none;
     color: inherit;
     display: block;
   }
-  .image-card:hover { border-color: var(--accent); }
-  .image-card img { width: 100%; height: 140px; object-fit: cover; display: block; }
-  .image-card-body { padding: 10px 12px; }
-  .image-card-name { font-size: 11px; margin-bottom: 4px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-  .image-card-meta { font-size: 9px; color: var(--text-muted); display: flex; justify-content: space-between; }
+  .image-card:hover {
+    border-color: var(--accent);
+    transform: translateY(-1px);
+  }
+  .card-thumb {
+    width: 100%;
+    height: 130px;
+    object-fit: cover;
+    display: block;
+    background: #111;
+  }
+  .card-body { padding: 9px 11px 10px; }
+  .card-name {
+    font-size: 10px;
+    margin-bottom: 5px;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    color: var(--text);
+  }
+  .card-meta {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 6px;
+  }
+  .card-boxes { font-size: 9px; color: var(--text-muted); }
   .status-chip {
-    font-size: 9px; padding: 1px 6px; border-radius: 2px;
-    text-transform: uppercase; letter-spacing: 0.5px;
+    font-size: 8px;
+    padding: 2px 6px;
+    border-radius: 2px;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    flex-shrink: 0;
   }
   .status-bound     { background: #1a3550; color: var(--accent); }
-  .status-classify  { background: #2a1f00; color: #f5a623; }
-  .status-specify   { background: #1a2e1a; color: var(--green); }
-  .status-complete  { background: #1a2a1a; color: var(--green); }
-  .section-title {
-    max-width: 1200px; margin: 0 auto;
-    padding: 24px 32px 12px;
-    font-family: var(--sans);
-    font-size: 13px; font-weight: 700;
+  .status-classify  { background: #2e1f00; color: var(--amber); }
+  .status-specify   { background: #221a2e; color: var(--purple); }
+  .status-complete  { background: #1a2e1a; color: var(--green); }
+
+  /* ─── EMPTY STATE ────────────────────────────────────────────── */
+  .empty-state {
+    padding: 60px 28px;
+    text-align: center;
     color: var(--text-muted);
-    text-transform: uppercase; letter-spacing: 1px;
-    border-bottom: 1px solid var(--border);
-    margin-bottom: 16px;
-    display: flex; align-items: center; justify-content: space-between;
   }
-  .cluster-bar {
-    max-width: 1200px; margin: 0 auto;
-    padding: 12px 32px;
-    display: flex; flex-wrap: wrap; gap: 6px; align-items: center;
+  .empty-state-icon { font-size: 36px; margin-bottom: 12px; opacity: 0.4; }
+  .empty-state-title { font-family: var(--sans); font-size: 16px; font-weight: 700; margin-bottom: 6px; color: var(--text); }
+  .empty-state-sub { font-size: 11px; color: var(--text-muted); }
+
+  /* ─── UPLOAD DRAG AREA ───────────────────────────────────────── */
+  .upload-drop {
+    display: none;
+    position: fixed;
+    inset: 0;
+    background: rgba(0,0,0,0.7);
+    z-index: 100;
+    align-items: center;
+    justify-content: center;
+    backdrop-filter: blur(4px);
   }
-  .cluster-chip {
-    padding: 4px 12px; border-radius: 3px;
-    font-size: 11px; cursor: pointer;
+  .upload-drop.visible { display: flex; }
+  .upload-drop-inner {
+    border: 2px dashed var(--accent);
+    border-radius: 8px;
+    padding: 60px 80px;
+    text-align: center;
+  }
+  .upload-drop-title { font-family: var(--sans); font-size: 18px; font-weight: 700; color: var(--accent); margin-bottom: 8px; }
+  .upload-drop-sub { font-size: 11px; color: var(--text-muted); }
+
+
+  /* ─── PAGINATION ──────────────────────────────────────────────── */
+  .pagination-bar {
+    display: flex; align-items: center; justify-content: center;
+    gap: 12px; padding: 8px 28px 32px;
+  }
+  .page-btn {
+    padding: 6px 16px; border-radius: 2px;
+    font-family: var(--mono); font-size: 11px; cursor: pointer;
     background: var(--bg-panel); border: 1px solid var(--border);
-    color: var(--text-muted); text-decoration: none;
-    transition: all 0.15s;
+    color: var(--text-muted); text-decoration: none; transition: all 0.15s;
   }
-  .cluster-chip:hover { border-color: var(--accent); color: var(--text); }
-  .cluster-chip.active { background: var(--accent-dim); border-color: var(--accent); color: var(--accent); }
+  .page-btn:hover { border-color: var(--accent); color: var(--accent); }
+  .page-btn.disabled { opacity: 0.3; pointer-events: none; }
+  .page-info { font-size: 10px; color: var(--text-dim); }
+  /* ─── SCROLLBAR ──────────────────────────────────────────────── */
+  ::-webkit-scrollbar { width: 5px; height: 5px; }
+  ::-webkit-scrollbar-track { background: transparent; }
+  ::-webkit-scrollbar-thumb { background: var(--border-hi); border-radius: 3px; }
 </style>
 </head>
 <body>
 
+<!-- ── HEADER ──────────────────────────────────────────────────────── -->
 <div class="header">
   <a class="logo" href="{% url 'annotator:index' %}"><span class="a">A</span><span class="s">S</span></a>
-  <div class="subtitle">Marine Image Annotator — Aquatic Sciences</div>
-  {% if role == "admin" or role == "annotator"%}
-  <button id="import-btn" onclick="importFromSupabase(event)"
-    style="margin-left:auto; background:#2a2a2a; color:#4a9eff; border:1px solid #4a9eff;
-          padding:6px 16px; border-radius:3px; font-family:var(--mono); font-size:11px; cursor:pointer;">
-    ↓ Import from Supabase
+  <span class="header-sub">Marine Image Annotator · Aquatic Sciences</span>
+
+  {% if role == "admin" or role == "annotator" %}
+  <button class="header-btn" id="import-btn" onclick="importFromSupabase(event)">
+    ↓ Import Supabase
   </button>
+  {% endif %}
+
+  {% if role == "admin" %}
+  <a class="header-btn" href="{% url 'annotator:admin_dashboard' %}">Admin ↗</a>
+  {% endif %}
+
+  <a class="header-btn" href="{% url 'logout' %}">Sign out</a>
+</div>
+
+<!-- ── PIPELINE STRIP ───────────────────────────────────────────────── -->
+<div class="pipeline-strip">
+
+  <a class="pipeline-stage stage-bound {% if active_status == 'bound' %}active{% endif %}"
+     href="?status=bound{% if active_cluster %}&cluster={{ active_cluster }}{% endif %}">
+    <div class="stage-icon">⬡</div>
+    <div class="stage-info">
+      <div class="stage-label">Bounding</div>
+      <div class="stage-count"><strong>{{ pipeline_counts.bound }}</strong> image{{ pipeline_counts.bound|pluralize:"s" }} waiting</div>
+    </div>
+  </a>
+
+  <a class="pipeline-stage stage-classify {% if active_status == 'classify' %}active{% endif %}"
+     href="?status=classify{% if active_cluster %}&cluster={{ active_cluster }}{% endif %}">
+    <div class="stage-icon">◈</div>
+    <div class="stage-info">
+      <div class="stage-label">Classifying</div>
+      <div class="stage-count"><strong>{{ pipeline_counts.classify }}</strong> image{{ pipeline_counts.classify|pluralize:"s" }} waiting</div>
+    </div>
+  </a>
+
+  <a class="pipeline-stage stage-specify {% if active_status == 'specify' %}active{% endif %}"
+     href="?status=specify{% if active_cluster %}&cluster={{ active_cluster }}{% endif %}">
+    <div class="stage-icon">◎</div>
+    <div class="stage-info">
+      <div class="stage-label">Specifying</div>
+      <div class="stage-count"><strong>{{ pipeline_counts.specify }}</strong> image{{ pipeline_counts.specify|pluralize:"s" }} waiting</div>
+    </div>
+  </a>
+
+  <a class="pipeline-stage stage-complete {% if active_status == 'complete' %}active{% endif %}"
+     href="?status=complete{% if active_cluster %}&cluster={{ active_cluster }}{% endif %}">
+    <div class="stage-icon">✓</div>
+    <div class="stage-info">
+      <div class="stage-label">Complete</div>
+      <div class="stage-count"><strong>{{ pipeline_counts.complete }}</strong> image{{ pipeline_counts.complete|pluralize:"s" }}</div>
+    </div>
+  </a>
+
+  <!-- "All" clears status filter -->
+  <a class="pipeline-stage {% if not active_status %}active{% endif %}"
+     href="?{% if active_cluster %}cluster={{ active_cluster }}{% endif %}"
+     style="margin-left: auto; --stage-color: var(--text-muted);">
+    <div class="stage-info">
+      <div class="stage-label" style="color: var(--text-muted)">All</div>
+      <div class="stage-count">{{ pipeline_counts.bound|add:pipeline_counts.classify|add:pipeline_counts.specify|add:pipeline_counts.complete }} total</div>
+    </div>
+  </a>
+
+</div>
+
+<!-- ── QUEUE CALLOUT (shown to role users with work to do) ─────────── -->
+{% if user_stage and queue_count > 0 %}
+<div class="queue-callout">
+  <div class="queue-callout-icon">
+    {% if user_stage == 'bound' %}⬡{% elif user_stage == 'classify' %}◈{% else %}◎{% endif %}
+  </div>
+  <div class="queue-callout-text">
+    <div class="queue-callout-title">
+      {% if user_stage == 'bound' %}{{ queue_count }} image{{ queue_count|pluralize:"s" }} ready to bound
+      {% elif user_stage == 'classify' %}{{ queue_count }} image{{ queue_count|pluralize:"s" }} ready to classify
+      {% else %}{{ queue_count }} image{{ queue_count|pluralize:"s" }} ready to specify
+      {% endif %}
+    </div>
+    <div class="queue-callout-sub">
+      Continue the production line — pick up where you left off
+    </div>
+  </div>
+  {% if next_in_queue %}
+  <a class="queue-start-btn" href="{% url 'annotator:workspace' next_in_queue.id user_stage %}">
+    Start Queue →
+  </a>
+  {% else %}
+  <span class="queue-start-btn empty">Queue empty ✓</span>
+  {% endif %}
+</div>
+{% elif user_stage and queue_count == 0 %}
+<div class="queue-callout" style="border-color: #2a3a2a;">
+  <div class="queue-callout-icon">✓</div>
+  <div class="queue-callout-text">
+    <div class="queue-callout-title" style="color: var(--text-muted)">Queue empty — you're all caught up!</div>
+    <div class="queue-callout-sub">No images currently need your attention</div>
+  </div>
+</div>
+{% endif %}
+
+<!-- ── UPLOAD + CLUSTER TOOLBAR ────────────────────────────────────── -->
+<div class="toolbar-row">
+  <span class="toolbar-title">
+    {% if active_status == 'bound' %}Bounding Queue
+    {% elif active_status == 'classify' %}Classification Queue
+    {% elif active_status == 'specify' %}Specification Queue
+    {% elif active_status == 'complete' %}Completed Images
+    {% elif active_cluster %}Cluster {{ active_cluster }}
+    {% else %}All Images
+    {% endif %}
+  </span>
+  <span class="toolbar-count">{{ total_count }} image{{ total_count|pluralize:"s" }}</span>
+
+  {% if role == "annotator" or role == "admin" %}
+  <button class="upload-trigger" onclick="document.getElementById('file-input').click()">
+    <svg width="12" height="12" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="2">
+      <line x1="8" y1="2" x2="8" y2="12"/><polyline points="4,6 8,2 12,6"/>
+      <line x1="2" y1="14" x2="14" y2="14"/>
+    </svg>
+    Upload Image
+  </button>
+  <input type="file" id="file-input" accept="image/*" style="display:none" onchange="uploadFile(this)">
   {% endif %}
 </div>
 
-{% if role == "annotator" or role == "admin" %}
-<div class="upload-area" onclick="document.getElementById('file-input').click()">
-  <input type="file" id="file-input" accept="image/*" onchange="uploadFile(this)">
-  <div class="upload-title">Upload Image for Analysis</div>
-  <div class="upload-sub">PNG, JPG, TIFF · Underwater / marine imagery</div>
-  <div class="upload-btn">Choose File</div>
-</div>
-{% endif %}
-
+<!-- ── CLUSTER CHIPS ───────────────────────────────────────────────── -->
 {% if clusters %}
-<div class="cluster-bar">
-  <span style="font-size:11px;color:var(--text-muted);margin-right:8px;">CLUSTERS:</span>
-  <a class="cluster-chip {% if not active_cluster %}active{% endif %}" href="?">All</a>
+<div class="cluster-section">
+  <span class="cluster-label">Cluster</span>
+  <a class="chip {% if not active_cluster %}active{% endif %}"
+     href="?{% if active_status %}status={{ active_status }}{% endif %}">All</a>
   {% for c in clusters %}
-  <a class="cluster-chip {% if active_cluster == c|stringformat:'d' %}active{% endif %}" href="?cluster={{ c }}">{{ c }}</a>
+  <a class="chip {% if active_cluster == c|stringformat:'d' %}active{% endif %}"
+     href="?{% if active_status %}status={{ active_status }}&{% endif %}cluster={{ c }}">
+    {{ c }}
+  </a>
   {% endfor %}
 </div>
 {% endif %}
-
-{% if images %}
-<div class="section-title">
-  <span>{% if active_cluster != None and active_cluster != "" %}Cluster {{ active_cluster }}{% else %}All Images{% endif %} ({{ images.count }})</span>
+<!-- ── CATEGORY CHIPS ──────────────────────────────────────────────── -->
+<div class="cluster-section">
+  <span class="cluster-label">Category</span>
+  <a class="chip {% if not active_category %}active{% endif %}"
+     href="?{% if active_status %}status={{ active_status }}&{% endif %}{% if active_cluster %}cluster={{ active_cluster }}&{% endif %}">All</a>
+  {% for cat, label in categories %}
+  <a class="chip {% if active_category == cat %}active{% endif %}"
+     href="?{% if active_status %}status={{ active_status }}&{% endif %}{% if active_cluster %}cluster={{ active_cluster }}&{% endif %}category={{ cat }}"
+     style="--chip-color: {{ cat|lower }}">
+    {{ label }}
+  </a>
+  {% endfor %}
 </div>
+
+<!-- ── IMAGE GRID ───────────────────────────────────────────────────── -->
+{% if page_obj %}
 <div class="image-grid">
-  {% for img in images %}
+  {% for img in page_obj %}
   <a class="image-card" href="{% url 'annotator:workspace' img.id img.status %}">
-    <img src="{{ img.image_url }}" alt="{{ img.original_filename }}">
-    <div class="image-card-body">
-      <div class="image-card-name">{{ img.original_filename }}</div>
-      <div class="image-card-meta">
-        <span>{{ img.box_count }} box{{ img.box_count|pluralize:"es" }}</span>
+    <img class="card-thumb" src="{{ img.thumbnail_url }}" alt="{{ img.original_filename }}" loading="lazy">
+    <div class="card-body">
+      <div class="card-name">{{ img.original_filename }}</div>
+      <div class="card-meta">
+        <span class="card-boxes">{{ img.box_count }} box{{ img.box_count|pluralize:"es" }}</span>
         <span class="status-chip status-{{ img.status }}">{{ img.get_status_display }}</span>
       </div>
     </div>
   </a>
   {% endfor %}
 </div>
+{% else %}
+<div class="empty-state">
+  <div class="empty-state-icon">
+    {% if active_status == 'complete' %}✓
+    {% else %}⬡{% endif %}
+  </div>
+  <div class="empty-state-title">
+    {% if active_status %}No images at this stage{% else %}No images yet{% endif %}
+  </div>
+  <div class="empty-state-sub">
+    {% if active_status == 'complete' %}No images have reached the complete stage yet.
+    {% elif active_status %}Images will appear here once they reach this stage.
+    {% elif role == "annotator" or role == "admin" %}Upload an image above or import from Supabase to get started.
+    {% else %}No images have been uploaded yet.
+    {% endif %}
+  </div>
+</div>
+{% endif %}
+
+<!-- ── DRAG-TO-UPLOAD OVERLAY ────────────────────────────────────────── -->
+{% if role == "annotator" or role == "admin" %}
+<div class="upload-drop" id="upload-drop">
+  <div class="upload-drop-inner">
+    <div class="upload-drop-title">Drop image to upload</div>
+    <div class="upload-drop-sub">PNG · JPG · TIFF · Underwater / marine imagery</div>
+  </div>
+</div>
+{% endif %}
+
+<!-- ─────────────────────────────────────────────────────────────────── -->
+
+<!-- ── PAGINATION ───────────────────────────────────────────────── -->
+{% if page_obj.paginator.num_pages > 1 %}
+<div class="pagination-bar">
+  {% if page_obj.has_previous %}
+  <a class="page-btn" href="?{% if active_status %}status={{ active_status }}&{% endif %}{% if active_cluster %}cluster={{ active_cluster }}&{% endif %}page={{ page_obj.previous_page_number }}">← Prev</a>
+  {% else %}
+  <span class="page-btn disabled">← Prev</span>
+  {% endif %}
+
+  <span class="page-info">
+    Page {{ page_obj.number }} of {{ page_obj.paginator.num_pages }}
+    &nbsp;·&nbsp;
+    {{ total_count }} total
+  </span>
+
+  {% if page_obj.has_next %}
+  <a class="page-btn" href="?{% if active_status %}status={{ active_status }}&{% endif %}{% if active_cluster %}cluster={{ active_cluster }}&{% endif %}page={{ page_obj.next_page_number }}">Next →</a>
+  {% else %}
+  <span class="page-btn disabled">Next →</span>
+  {% endif %}
+</div>
 {% endif %}
 
 <script>
+/* ── File upload ─────────────────────────────────────────────────── */
 async function uploadFile(input) {
   const file = input.files[0];
   if (!file) return;
   const fd = new FormData();
   fd.append("image", file);
   fd.append("csrfmiddlewaretoken", "{{ csrf_token }}");
+  const btn = document.querySelector(".upload-trigger");
+  if (btn) { btn.textContent = "Uploading…"; btn.style.pointerEvents = "none"; }
   const r = await fetch("/annotator/upload/", { method: "POST", body: fd });
   const d = await r.json();
   if (d.redirect) window.location = d.redirect;
+  else alert("Upload failed: " + (d.error || "Unknown error"));
 }
 
-async function importFromSupabase() {
-   event.stopPropagation(); 
+/* ── Drag-and-drop upload ────────────────────────────────────────── */
+{% if role == "annotator" or role == "admin" %}
+const dropOverlay = document.getElementById("upload-drop");
+let dragCounter  = 0;
+document.addEventListener("dragenter", e => {
+  if (e.dataTransfer.types.includes("Files")) { dragCounter++; dropOverlay.classList.add("visible"); }
+});
+document.addEventListener("dragleave", () => {
+  dragCounter--;
+  if (dragCounter <= 0) { dragCounter = 0; dropOverlay.classList.remove("visible"); }
+});
+document.addEventListener("dragover", e => e.preventDefault());
+document.addEventListener("drop", async e => {
+  e.preventDefault();
+  dragCounter = 0;
+  dropOverlay.classList.remove("visible");
+  const file = e.dataTransfer.files[0];
+  if (!file || !file.type.startsWith("image/")) return;
+  const fake = new DataTransfer();
+  fake.items.add(file);
+  document.getElementById("file-input").files = fake.files;
+  await uploadFile(document.getElementById("file-input"));
+});
+{% endif %}
+
+/* ── Import from Supabase ─────────────────────────────────────────── */
+async function importFromSupabase(event) {
+  event.stopPropagation();
   const btn = document.getElementById("import-btn");
+  const orig = btn.textContent;
   btn.textContent = "Importing…";
   btn.style.pointerEvents = "none";
   btn.style.opacity = "0.6";
@@ -189,19 +670,17 @@ async function importFromSupabase() {
   });
   const d = await r.json();
 
+  btn.textContent = orig;
+  btn.style.pointerEvents = "";
+  btn.style.opacity = "";
+
   if (d.error) {
     alert("Import failed: " + d.error);
   } else {
-    alert(`Done! Imported: ${d.imported}, already existed: ${d.skipped}`);
-    window.location.reload();
+    alert(`Done!  Imported: ${d.imported}  ·  Already existed: ${d.skipped}`);
+    if (d.imported > 0) window.location.reload();
   }
-
-  btn.textContent = "↓ Import from Supabase";
-  btn.style.pointerEvents = "";
-  btn.style.opacity = "";
 }
 </script>
-</body>
-</html>
 </body>
 </html>

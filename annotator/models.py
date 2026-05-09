@@ -44,6 +44,21 @@ class AnalysisImage(models.Model):
     def __str__(self):
         return f"{self.original_filename} [{self.status}]"
 
+    @property
+    def thumbnail_url(self):
+        """
+        Supabase Storage image transform endpoint — returns a ~320px wide
+        JPEG at 60% quality instead of the full-resolution original.
+        Cuts per-image transfer from ~300 KB down to ~8–15 KB.
+        Falls back to the original URL for non-Supabase hosts.
+        """
+        if not self.image_url or "/storage/v1/object/public/" not in self.image_url:
+            return self.image_url
+        return (
+            self.image_url.replace("/storage/v1/object/public/", "/storage/v1/render/image/public/")
+            + "?width=320&quality=60&resize=cover"
+        )
+
     class Meta:
         ordering = ["-uploaded_at"]
 
