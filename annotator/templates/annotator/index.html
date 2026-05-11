@@ -392,12 +392,6 @@
   <a class="logo" href="{% url 'annotator:index' %}"><span class="a">A</span><span class="s">S</span></a>
   <span class="header-sub">Marine Image Annotator · Aquatic Sciences</span>
 
-  {% if role == "admin" or role == "annotator" %}
-  <button class="header-btn" id="import-btn" onclick="importFromSupabase(event)">
-    ↓ Import Supabase
-  </button>
-  {% endif %}
-
   {% if role == "classifier" or role == "researcher" or role == "admin" %}
   <a class="header-btn" href="{% url 'annotator:review' %}">⚡ Review queue</a>
   {% endif %}
@@ -659,32 +653,6 @@ document.addEventListener("drop", async e => {
 });
 {% endif %}
 
-/* ── Import from Supabase ─────────────────────────────────────────── */
-async function importFromSupabase(event) {
-  event.stopPropagation();
-  const btn = document.getElementById("import-btn");
-  const orig = btn.textContent;
-  btn.textContent = "Importing…";
-  btn.style.pointerEvents = "none";
-  btn.style.opacity = "0.6";
-
-  const r = await fetch("/annotator/import-supabase/", {
-    method: "POST",
-    headers: { "X-CSRFToken": "{{ csrf_token }}" },
-  });
-  const d = await r.json();
-
-  btn.textContent = orig;
-  btn.style.pointerEvents = "";
-  btn.style.opacity = "";
-
-  if (d.error) {
-    alert("Import failed: " + d.error);
-  } else {
-    alert(`Done!  Imported: ${d.imported}  ·  Already existed: ${d.skipped}`);
-    if (d.imported > 0) window.location.reload();
-  }
-}
 </script>
 </body>
 </html>
