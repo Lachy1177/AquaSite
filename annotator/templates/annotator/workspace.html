@@ -755,9 +755,9 @@
           </svg>
         </button>
         <div class="tool-sep"></div>
-        <button class="specify-quick" id="finalise-all" onclick="finaliseAll()"
-                title="Finalise All">
-          Finalise all classifications
+        <button class="specify-quick" id="select-all" onclick="selectMany()"
+                title="Select All">
+          Select all boxes
         </button>
         <div class="tool-sep"></div>
         <span class="tool-label">Select a box to specify species →</span>
@@ -839,7 +839,8 @@ const IS_VIEWER    = USER_ROLE === "viewer";
 // ── STATE ──────────────────────────────────────────────────────────
 let boxes        = [];
 let selectedId   = null;
-let selectedBoxes = [];
+let selectedBoxes= [];
+let selectAll    = false;
 let autoAI       = true;
 let currentTool  = "select";
 let imgNatW      = 0, imgNatH = 0;
@@ -994,7 +995,10 @@ function renderBox(b) {
 // ── BOX INTERACTION ────────────────────────────────────────────────
 function selectBox(id) {
   selectedId = id;
-  if (event.shiftKey) {selectedBoxes.push(selectedId);
+  if (event.shiftKey || selectAll) {
+    if (selectedBoxes.includes(selectedId)) {
+      selectedBoxes = selectedBoxes.filter(removed => removed !== selectedId);
+    } else {selectedBoxes.push(selectedId);}
   } else {selectedBoxes = [selectedId];}
   renderAllBoxes();
   const b = boxes.find(x => x.id === id);
@@ -1457,19 +1461,27 @@ function showSpecifyPanel(b) {
 async function saveSpecify(finalise) {
   if (!CAN_SPECIFY) { toast("You do not have permission to finalise boxes"); return; }
   if (!selectedId) return;
+
   const species = document.getElementById("spec-species")?.value || "";
   const notes   = document.getElementById("spec-notes")?.value   || "";
-  const data = await api(`boxes/${selectedId}/specify/`, "POST", {
-    species_name: species, researcher_notes: notes, is_finalized: finalise,
-  });
-  const b = boxes.find(x => x.id === selectedId);
-  if (b) { b.species_name = data.species_name; b.researcher_notes = data.researcher_notes; b.is_finalized = data.is_finalized; }
+  // To make even faster, need to do same change as applyLabel, as in, create a specify_many in views.
+  for (selected of selectedBoxes) {
+    const data = await api(`boxes/${selected}/specify/`, "POST", {
+      species_name: species, researcher_notes: notes, is_finalized: finalise,
+    });
+    const b = boxes.find(x => x.id === selected);
+    if (b) { b.species_name = data.species_name; b.researcher_notes = data.researcher_notes; b.is_finalized = data.is_finalized; } 
+  }
   renderAllBoxes(); renderBoxLists();
   toast(finalise ? "Box finalised ✓" : "Draft saved");
 }
 
-async function finaliseAll() {
-  toast('Something must be done here.')
+async function selectMany() {
+  selectAll = true;
+  for (const b of boxes) {
+    selectBox(b.id);
+  }
+  selectAll = false;
 }
 
 
