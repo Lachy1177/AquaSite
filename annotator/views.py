@@ -282,6 +282,10 @@ def api_boxes(request, image_id):
             if field not in data:
                 return JsonResponse({"error": f"Missing field: {field}"}, status=400)
 
+        coord_error = _validate_coords(data)
+        if coord_error:
+            return JsonResponse({"error": coord_error}, status=400)
+
         box = BoundingBox.objects.create(
             image=image,
             x=data["x"], y=data["y"],
@@ -308,6 +312,9 @@ def api_box_detail(request, image_id, box_id):
 
     if request.method == "PATCH":
         data = json.loads(request.body)
+        coord_error = _validate_coords(data)
+        if coord_error:
+            return JsonResponse({"error": coord_error}, status=400)
         for field in ("x", "y", "width", "height"):
             if field in data:
                 setattr(box, field, data[field])
@@ -726,6 +733,20 @@ def admin_dashboard(request):
 # ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------
+
+def _validate_coords(data):
+    """Return an error string if any coordinate fields in data are out of range, else None."""
+    for field in ("x", "y", "width", "height"):
+        if field not in data:
+            continue
+        try:
+            val = float(data[field])
+        except (TypeError, ValueError):
+            return f"'{field}' must be a number"
+        if not (0 <= val <= 100):
+            return f"'{field}' must be between 0 and 100"
+    return None
+
 
 def get_user_role(user):
     if not user.is_authenticated:
