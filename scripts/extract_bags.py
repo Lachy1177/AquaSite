@@ -148,14 +148,14 @@ def main():
         register_bag_types(b)
         dive_start = datetime.fromtimestamp(b.start_time / 1e9, tz=timezone.utc)
 
-    # Create the dive record
-    result = supabase.table("dives").insert({
+    # Create the dive record (upsert — safe to re-run if name already exists)
+    result = supabase.table("dives").upsert({
         "name": DIVE_NAME,
         "recorded_at": dive_start.isoformat(),
         "bag_dir": BAG_DIR,
-    }).execute()
+    }, on_conflict="name").execute()
     dive_id = result.data[0]["id"]
-    print(f"✓ Dive created  id={dive_id}  name={DIVE_NAME}\n")
+    print(f"✓ Dive upserted  id={dive_id}  name={DIVE_NAME}\n")
 
     clip_paths = []
 
