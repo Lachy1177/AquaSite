@@ -95,6 +95,11 @@ class BoundingBox(models.Model):
         null=True, blank=True, related_name="classified_boxes"
     )
     classified_at = models.DateTimeField(null=True, blank=True)
+    is_ai_reviewed = models.BooleanField(
+        default=False,
+        help_text="True once a human has explicitly confirmed or corrected "
+                  "the DINOv3 suggestion in the review queue.",
+    )
 
     # Specification phase (researcher identification)
     species_name = models.CharField(max_length=255, blank=True)
@@ -127,6 +132,7 @@ class BoundingBox(models.Model):
             "species_name": self.species_name,
             "researcher_notes": self.researcher_notes,
             "is_finalized": self.is_finalized,
+            "is_ai_reviewed": self.is_ai_reviewed,
         }
 
     class Meta:

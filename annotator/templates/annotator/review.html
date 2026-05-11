@@ -1,0 +1,577 @@
+{% load static %}
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>AS · Review queue</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@300;400;500;600&family=Syne:wght@400;600;700;800&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --bg:         #1e1e1e;
+    --bg-mid:     #252525;
+    --bg-panel:   #2a2a2a;
+    --bg-hover:   #323232;
+    --border:     #3a3a3a;
+    --border-hi:  #505050;
+    --text:       #d4d4d4;
+    --text-muted: #7a7a7a;
+    --text-dim:   #555;
+    --accent:     #4a9eff;
+    --green:      #4ecb71;
+    --amber:      #f5a623;
+    --red:        #e05252;
+    --coral-c:    #ff7043;
+    --fish-c:     #29b6f6;
+    --invert-c:   #ce93d8;
+    --algae-c:    #81c784;
+    --other-c:    #90a4ae;
+    --mono:       'JetBrains Mono', monospace;
+    --sans:       'Syne', sans-serif;
+  }
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
+    background: var(--bg); color: var(--text);
+    font-family: var(--mono); font-size: 12px;
+    height: 100vh; display: flex; flex-direction: column;
+  }
+
+  /* Title bar */
+  .title-bar {
+    height: 42px; background: var(--bg-mid);
+    border-bottom: 1px solid var(--border);
+    display: flex; align-items: center; padding: 0 18px; gap: 18px;
+  }
+  .logo {
+    font-family: var(--sans); font-size: 18px; font-weight: 800;
+    letter-spacing: -0.5px; display: flex; align-items: baseline;
+    text-decoration: none; color: var(--text);
+  }
+  .logo .a { color: var(--accent); }
+  .title-tag {
+    font-size: 10px; padding: 3px 8px; border-radius: 2px;
+    background: #2a1f00; color: var(--amber);
+    text-transform: uppercase; letter-spacing: 0.8px;
+  }
+  .title-meta { color: var(--text-muted); margin-left: auto; font-size: 11px; }
+  .title-meta b { color: var(--text); }
+
+  /* Main layout */
+  main {
+    flex: 1; display: flex; gap: 18px; padding: 18px;
+    overflow: hidden;
+  }
+  .card {
+    flex: 1; min-width: 0; background: var(--bg-panel);
+    border: 1px solid var(--border); border-radius: 4px;
+    display: flex; flex-direction: column; overflow: hidden;
+  }
+  .image-area {
+    flex: 1; min-height: 0;
+    display: flex; gap: 10px;
+  }
+  .image-wrap {
+    flex: 2; min-width: 0; min-height: 0; position: relative;
+    display: flex; align-items: center; justify-content: center;
+    background: #111;
+  }
+  .image-wrap img {
+    max-width: 100%; max-height: 100%; display: block;
+    user-select: none; pointer-events: none;
+  }
+  .box-frame {
+    position: absolute; pointer-events: none;
+    box-shadow: 0 0 0 2px var(--amber), 0 0 0 9999px rgba(0,0,0,0.55);
+    transition: box-shadow 120ms;
+  }
+  .crop-wrap {
+    flex: 1; max-width: 420px; min-width: 220px;
+    background: #111; position: relative;
+    display: flex; align-items: center; justify-content: center;
+    border-left: 1px solid var(--border);
+  }
+  .crop-wrap canvas {
+    width: 100%; height: 100%; display: block;
+  }
+  .crop-label {
+    position: absolute; top: 8px; left: 10px;
+    font-size: 9px; color: var(--text-muted);
+    text-transform: uppercase; letter-spacing: 0.8px;
+    background: rgba(0,0,0,0.55); padding: 3px 7px; border-radius: 2px;
+    pointer-events: none;
+  }
+  .empty {
+    display: flex; flex-direction: column; align-items: center;
+    justify-content: center; gap: 8px;
+    color: var(--text-muted); font-size: 13px;
+  }
+  .empty .big { font-family: var(--sans); font-size: 22px; color: var(--text); }
+
+  /* Bottom action bar */
+  .actions {
+    padding: 14px 18px; border-top: 1px solid var(--border);
+    background: var(--bg-mid);
+    display: flex; flex-direction: column; gap: 12px;
+  }
+  .suggest-row {
+    display: flex; align-items: center; gap: 12px;
+    font-size: 13px;
+  }
+  .suggest-label {
+    font-family: var(--sans); font-weight: 700; font-size: 18px;
+    color: var(--text);
+  }
+  .conf-bar {
+    flex: 1; height: 6px; background: var(--bg-panel);
+    border-radius: 3px; overflow: hidden;
+  }
+  .conf-fill { height: 100%; background: var(--amber); transition: width 200ms; }
+  .conf-pct { color: var(--text-muted); font-size: 11px; min-width: 40px; text-align: right; }
+  .stratum {
+    font-size: 9px; padding: 3px 7px; border-radius: 2px;
+    text-transform: uppercase; letter-spacing: 0.8px;
+  }
+  .stratum-uncertain { background: #2a1f00; color: var(--amber); }
+  .stratum-rare      { background: #2e1a2a; color: var(--invert-c); }
+  .stratum-high_conf { background: #1a2e1a; color: var(--green); }
+
+  .btn-row { display: flex; gap: 12px; }
+  .btn {
+    flex: 1; padding: 14px; border: 1px solid var(--border);
+    background: var(--bg-panel); color: var(--text);
+    font-family: var(--mono); font-size: 13px; font-weight: 600;
+    cursor: pointer; border-radius: 4px;
+    display: flex; align-items: center; justify-content: center;
+    gap: 8px; transition: all 120ms;
+  }
+  .btn:hover:not(:disabled) { background: var(--bg-hover); border-color: var(--border-hi); }
+  .btn:disabled { opacity: 0.4; cursor: not-allowed; }
+  .btn-confirm { background: #1a2e1a; border-color: #2a4e2a; color: var(--green); }
+  .btn-confirm:hover:not(:disabled) { background: #234d23; }
+  .btn-wrong { background: #2e1a1a; border-color: #4e2a2a; color: var(--red); }
+  .btn-wrong:hover:not(:disabled) { background: #4d2323; }
+  .btn .kbd {
+    font-size: 9px; padding: 2px 5px; background: rgba(255,255,255,0.06);
+    border-radius: 2px;
+  }
+
+  /* Correction picker */
+  .picker {
+    background: var(--bg-mid); border-top: 1px solid var(--border);
+    padding: 14px 18px;
+  }
+  .picker-title {
+    font-size: 11px; color: var(--text-muted); margin-bottom: 8px;
+    text-transform: uppercase; letter-spacing: 0.8px;
+  }
+  .picker-grid {
+    display: flex; flex-wrap: wrap; gap: 6px;
+  }
+  .picker-btn {
+    padding: 6px 10px; background: var(--bg-panel);
+    border: 1px solid var(--border); border-radius: 2px;
+    color: var(--text); font-family: var(--mono); font-size: 11px;
+    cursor: pointer; display: flex; align-items: center; gap: 6px;
+  }
+  .picker-btn:hover { background: var(--bg-hover); border-color: var(--border-hi); }
+  .cat-dot {
+    width: 8px; height: 8px; border-radius: 50%;
+  }
+  .cat-fish         { background: var(--fish-c); }
+  .cat-coral        { background: var(--coral-c); }
+  .cat-invertebrate { background: var(--invert-c); }
+  .cat-algae        { background: var(--algae-c); }
+  .cat-other        { background: var(--other-c); }
+  .picker-cancel {
+    margin-top: 8px; color: var(--text-muted); cursor: pointer;
+    font-size: 10px; background: none; border: none;
+  }
+  .picker-cancel:hover { color: var(--text); }
+
+  /* Side panel */
+  .side {
+    width: 260px; flex-shrink: 0;
+    background: var(--bg-panel); border: 1px solid var(--border);
+    border-radius: 4px; padding: 14px;
+    display: flex; flex-direction: column; gap: 14px;
+    overflow-y: auto;
+  }
+  .side-title {
+    font-family: var(--sans); font-size: 13px; font-weight: 700;
+    color: var(--text); margin-bottom: 4px;
+  }
+  .side-stat {
+    display: flex; justify-content: space-between;
+    font-size: 11px; color: var(--text-muted);
+  }
+  .side-stat b { color: var(--text); font-weight: 600; }
+  .side-section {
+    border-top: 1px solid var(--border); padding-top: 10px;
+  }
+  .meta-row {
+    display: flex; flex-direction: column; gap: 2px;
+    font-size: 10px; color: var(--text-muted);
+  }
+  .meta-row b { color: var(--text); font-weight: 500; font-size: 11px; }
+  .help {
+    font-size: 10px; color: var(--text-dim); line-height: 1.5;
+  }
+  .help b { color: var(--text-muted); }
+
+  /* Toast */
+  .toast {
+    position: fixed; bottom: 18px; left: 50%; transform: translateX(-50%);
+    background: var(--bg-mid); border: 1px solid var(--border-hi);
+    padding: 8px 14px; border-radius: 3px; font-size: 11px;
+    opacity: 0; transition: opacity 200ms; pointer-events: none;
+    color: var(--text);
+  }
+  .toast.show { opacity: 1; }
+</style>
+</head>
+<body>
+
+<div class="title-bar">
+  <a href="{% url 'annotator:index' %}" class="logo"><span class="a">a</span><span>s</span></a>
+  <span class="title-tag">Review queue</span>
+  <span class="title-meta">
+    Card <b id="pos">0</b> / <b id="batch-size">0</b>
+    · <b id="remaining">—</b> remaining
+  </span>
+</div>
+
+<main>
+  <div class="card">
+    <div class="image-area" id="image-area">
+      <div class="image-wrap" id="image-wrap">
+        <div class="empty" id="empty-state" style="display:none;">
+          <div class="big">Queue empty</div>
+          <div>No unreviewed suggestions left. Run <code>populate_ai_suggestions</code> to refill.</div>
+        </div>
+        <img id="frame-img" alt="" style="display:none;">
+        <div class="box-frame" id="box-frame" style="display:none;"></div>
+      </div>
+      <div class="crop-wrap" id="crop-wrap" style="display:none;">
+        <canvas id="crop-canvas" width="800" height="800"></canvas>
+        <div class="crop-label">Box content (what DINOv3 saw)</div>
+      </div>
+    </div>
+
+    <div class="actions" id="actions" style="display:none;">
+      <div class="suggest-row">
+        <span class="suggest-label" id="sugg-label">—</span>
+        <div class="conf-bar"><div class="conf-fill" id="conf-fill" style="width:0%"></div></div>
+        <span class="conf-pct" id="conf-pct">0%</span>
+        <span class="stratum" id="stratum">—</span>
+      </div>
+      <div class="btn-row">
+        <button class="btn btn-confirm" id="btn-confirm" onclick="confirmSuggestion()">
+          ✓ Confirm <span class="kbd">Y</span>
+        </button>
+        <button class="btn btn-wrong" id="btn-wrong" onclick="showPicker()">
+          ✗ Wrong — pick correct <span class="kbd">N</span>
+        </button>
+      </div>
+    </div>
+
+    <div class="picker" id="picker" style="display:none;">
+      <div class="picker-title">Choose the correct label</div>
+      <div class="picker-grid" id="picker-grid"></div>
+      <button class="picker-cancel" onclick="hidePicker()">Cancel (Esc)</button>
+    </div>
+  </div>
+
+  <aside class="side">
+    <div>
+      <div class="side-title">Session</div>
+      <div class="side-stat"><span>Confirmed</span><b id="stat-confirmed">0</b></div>
+      <div class="side-stat"><span>Corrected</span><b id="stat-corrected">0</b></div>
+    </div>
+    <div class="side-section">
+      <div class="side-title">This box</div>
+      <div class="meta-row"><span>Frame</span><b id="meta-frame">—</b></div>
+      <div class="meta-row"><span>Stratum</span><b id="meta-stratum">—</b></div>
+      <div class="meta-row"><span>Box id</span><b id="meta-box" style="font-size:9px;">—</b></div>
+    </div>
+    <div class="side-section help">
+      <b>Keyboard</b><br>
+      <b>Y</b> · Confirm<br>
+      <b>N</b> / <b>W</b> · Wrong → pick<br>
+      <b>1–9</b> · Pick in picker<br>
+      <b>Esc</b> · Cancel picker<br>
+      <b>R</b> · Refresh queue<br><br>
+      <b>How it feeds the model</b><br>
+      Confirmations + corrections both write <code>is_ai_reviewed=True</code>, which a future training run can use to weight reviewed labels more heavily than unverified ones.
+    </div>
+  </aside>
+</main>
+
+<div class="toast" id="toast"></div>
+
+<script>
+  const TAXONOMY = {{ taxonomy_json|safe }};
+  const CSRF = "{{ csrf_token }}";
+
+  let queue = [];
+  let pos = 0;
+  let stats = { confirmed: 0, corrected: 0 };
+
+  function toast(msg) {
+    const t = document.getElementById("toast");
+    t.textContent = msg;
+    t.classList.add("show");
+    clearTimeout(toast._t);
+    toast._t = setTimeout(() => t.classList.remove("show"), 1800);
+  }
+
+  async function api(path, method = "GET", body = null) {
+    const opts = {
+      method,
+      headers: {
+        "X-CSRFToken": CSRF,
+        "Content-Type": "application/json",
+      },
+      credentials: "same-origin",
+    };
+    if (body !== null) opts.body = JSON.stringify(body);
+    const res = await fetch(path, opts);
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok) throw new Error(data.error || `HTTP ${res.status}`);
+    return data;
+  }
+
+  async function loadQueue() {
+    try {
+      const data = await api("{% url 'annotator:api_review_queue' %}", "GET");
+      queue = data.queue || [];
+      pos = 0;
+      document.getElementById("batch-size").textContent = queue.length;
+      document.getElementById("remaining").textContent = data.remaining ?? "—";
+      render();
+    } catch (e) {
+      toast("Failed to load queue: " + e.message);
+    }
+  }
+
+  function render() {
+    const img = document.getElementById("frame-img");
+    const frame = document.getElementById("box-frame");
+    const actions = document.getElementById("actions");
+    const empty = document.getElementById("empty-state");
+    const cropWrap = document.getElementById("crop-wrap");
+    hidePicker();
+
+    if (pos >= queue.length) {
+      img.style.display = "none";
+      frame.style.display = "none";
+      actions.style.display = "none";
+      cropWrap.style.display = "none";
+      empty.style.display = "flex";
+      document.getElementById("pos").textContent = queue.length;
+      return;
+    }
+
+    empty.style.display = "none";
+    cropWrap.style.display = "flex";
+    const box = queue[pos];
+    document.getElementById("pos").textContent = pos + 1;
+
+    // Full-res original — the 320px thumbnail letterboxes badly in this
+    // viewer and `resize=cover` without a height distorts aspect ratio.
+    img.src = box.image_url;
+    img.style.display = "block";
+    img.onload = () => { positionBoxOverlay(); drawCrop(); };
+
+    actions.style.display = "flex";
+    document.getElementById("sugg-label").textContent = box.ai_suggested_label || "—";
+    const pct = Math.round((box.ai_suggestion_confidence || 0) * 100);
+    document.getElementById("conf-fill").style.width = pct + "%";
+    document.getElementById("conf-pct").textContent = pct + "%";
+
+    const stratum = document.getElementById("stratum");
+    stratum.textContent = box.stratum;
+    stratum.className = "stratum stratum-" + box.stratum;
+
+    document.getElementById("meta-frame").textContent = box.original_filename || "—";
+    document.getElementById("meta-stratum").textContent = box.stratum;
+    document.getElementById("meta-box").textContent = box.id;
+  }
+
+  function positionBoxOverlay() {
+    const img = document.getElementById("frame-img");
+    const frame = document.getElementById("box-frame");
+    if (pos >= queue.length) return;
+    const box = queue[pos];
+    const rect = img.getBoundingClientRect();
+    const wrap = document.getElementById("image-wrap").getBoundingClientRect();
+    const left = (rect.left - wrap.left) + (box.x / 100) * rect.width;
+    const top = (rect.top - wrap.top) + (box.y / 100) * rect.height;
+    const w = (box.width / 100) * rect.width;
+    const h = (box.height / 100) * rect.height;
+    frame.style.left = left + "px";
+    frame.style.top = top + "px";
+    frame.style.width = w + "px";
+    frame.style.height = h + "px";
+    frame.style.display = "block";
+  }
+  window.addEventListener("resize", () => { positionBoxOverlay(); drawCrop(); });
+
+  function drawCrop() {
+    if (pos >= queue.length) return;
+    const img = document.getElementById("frame-img");
+    const canvas = document.getElementById("crop-canvas");
+    if (!img.complete || !img.naturalWidth) return;
+
+    const wrap = document.getElementById("crop-wrap");
+    const dpr = window.devicePixelRatio || 1;
+    const cw = wrap.clientWidth, ch = wrap.clientHeight;
+    if (cw === 0 || ch === 0) return;
+    canvas.width = cw * dpr;
+    canvas.height = ch * dpr;
+    canvas.style.width = cw + "px";
+    canvas.style.height = ch + "px";
+
+    const ctx = canvas.getContext("2d");
+    ctx.imageSmoothingEnabled = true;
+    ctx.imageSmoothingQuality = "high";
+    ctx.fillStyle = "#111";
+    ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+    const box = queue[pos];
+    const W = img.naturalWidth, H = img.naturalHeight;
+    // Expand box by 15% on each side for context — same idea as the
+    // crop-expansion improvement we'd apply to the inference path.
+    const pad = 0.15;
+    const bw = (box.width / 100) * W;
+    const bh = (box.height / 100) * H;
+    let sx = (box.x / 100) * W - bw * pad;
+    let sy = (box.y / 100) * H - bh * pad;
+    let sw = bw * (1 + 2 * pad);
+    let sh = bh * (1 + 2 * pad);
+    // Clamp to image bounds
+    if (sx < 0) { sw += sx; sx = 0; }
+    if (sy < 0) { sh += sy; sy = 0; }
+    if (sx + sw > W) sw = W - sx;
+    if (sy + sh > H) sh = H - sy;
+    if (sw <= 0 || sh <= 0) return;
+
+    // Preserve aspect ratio: fit (sw × sh) into canvas, letterbox the remainder
+    const scale = Math.min(canvas.width / sw, canvas.height / sh);
+    const drawW = sw * scale;
+    const drawH = sh * scale;
+    const drawX = (canvas.width - drawW) / 2;
+    const drawY = (canvas.height - drawH) / 2;
+    try {
+      ctx.drawImage(img, sx, sy, sw, sh, drawX, drawY, drawW, drawH);
+    } catch (e) {
+      // Cross-origin tainted canvas — drawImage itself shouldn't throw,
+      // but bail quietly if Supabase headers ever change.
+    }
+
+    // Outline the inner box (the actual annotated region, minus the padding)
+    const inner = {
+      x: drawX + (bw * pad * scale),
+      y: drawY + (bh * pad * scale),
+      w: bw * scale,
+      h: bh * scale,
+    };
+    ctx.strokeStyle = "rgba(245, 166, 35, 0.9)";
+    ctx.lineWidth = 2 * dpr;
+    ctx.strokeRect(inner.x, inner.y, inner.w, inner.h);
+  }
+
+  async function confirmSuggestion() {
+    if (pos >= queue.length) return;
+    const box = queue[pos];
+    try {
+      await api(`/annotator/api/review/${box.id}/confirm/`, "POST");
+      stats.confirmed++;
+      document.getElementById("stat-confirmed").textContent = stats.confirmed;
+      advance();
+    } catch (e) {
+      toast(e.message);
+    }
+  }
+
+  async function correctSuggestion(labelId) {
+    if (pos >= queue.length) return;
+    const box = queue[pos];
+    try {
+      await api(`/annotator/api/review/${box.id}/correct/`, "POST", {
+        taxonomy_label_id: labelId,
+      });
+      stats.corrected++;
+      document.getElementById("stat-corrected").textContent = stats.corrected;
+      advance();
+    } catch (e) {
+      toast(e.message);
+    }
+  }
+
+  function advance() {
+    pos++;
+    if (pos >= queue.length) {
+      loadQueue();
+    } else {
+      render();
+    }
+  }
+
+  function buildPicker() {
+    const grid = document.getElementById("picker-grid");
+    grid.innerHTML = "";
+    TAXONOMY.forEach((t, idx) => {
+      const btn = document.createElement("button");
+      btn.className = "picker-btn";
+      const dot = document.createElement("span");
+      dot.className = "cat-dot cat-" + t.category;
+      btn.appendChild(dot);
+      const text = document.createTextNode(
+        (idx < 9 ? `${idx + 1}. ` : "") + t.name
+      );
+      btn.appendChild(text);
+      btn.onclick = () => correctSuggestion(t.id);
+      grid.appendChild(btn);
+    });
+  }
+
+  function showPicker() {
+    if (pos >= queue.length) return;
+    document.getElementById("picker").style.display = "block";
+    document.getElementById("actions").style.display = "none";
+  }
+
+  function hidePicker() {
+    document.getElementById("picker").style.display = "none";
+    if (pos < queue.length) {
+      document.getElementById("actions").style.display = "flex";
+    }
+  }
+
+  document.addEventListener("keydown", (e) => {
+    if (e.target.tagName === "INPUT" || e.target.tagName === "TEXTAREA") return;
+    const pickerOpen = document.getElementById("picker").style.display !== "none";
+
+    if (pickerOpen) {
+      if (e.key === "Escape") { hidePicker(); e.preventDefault(); return; }
+      const n = parseInt(e.key, 10);
+      if (n >= 1 && n <= 9 && n <= TAXONOMY.length) {
+        correctSuggestion(TAXONOMY[n - 1].id);
+        e.preventDefault();
+      }
+      return;
+    }
+
+    if (e.key === "y" || e.key === "Y") { confirmSuggestion(); e.preventDefault(); }
+    else if (e.key === "n" || e.key === "N" || e.key === "w" || e.key === "W") {
+      showPicker(); e.preventDefault();
+    }
+    else if (e.key === "r" || e.key === "R") { loadQueue(); e.preventDefault(); }
+  });
+
+  buildPicker();
+  loadQueue();
+</script>
+</body>
+</html>

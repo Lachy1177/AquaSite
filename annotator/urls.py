@@ -32,6 +32,12 @@ urlpatterns = [
     # ── Export ───────────────────────────────────────────────────────
     path("api/<uuid:image_id>/export/", views.api_export, name="api_export"),
 
+    # ── HITL review queue ────────────────────────────────────────────
+    path("review/", views.review_dashboard, name="review"),
+    path("api/review/queue/", views.api_review_queue, name="api_review_queue"),
+    path("api/review/<uuid:box_id>/confirm/", views.api_review_confirm, name="api_review_confirm"),
+    path("api/review/<uuid:box_id>/correct/", views.api_review_correct, name="api_review_correct"),
+
     # ── Admin ────────────────────────────────────────────────────────
     path("admin-dashboard/", views.admin_dashboard, name="admin_dashboard"),
     path("import-supabase/", views.import_from_supabase, name="import_supabase"),

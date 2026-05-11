@@ -387,6 +387,30 @@ def _fetch_frame_bytes(image):
         return None, JsonResponse({"error": f"Could not fetch image: {exc}"}, status=502)
 
 
+def _persist_suggestion(box, result):
+    """Cache the top-1 DINOv3 prediction on the box for the review queue.
+
+    Skips rows a human has already reviewed so we never overwrite the
+    snapshot the reviewer acted on. `result` is the dict returned by
+    `ml.bridge.run_dino_inference_on_crop[s]`.
+    """
+    if box.is_ai_reviewed:
+        return
+    label = result.get("label")
+    if not label:
+        return
+    confidence = result.get("confidence")
+    changed = False
+    if box.ai_suggested_label != label:
+        box.ai_suggested_label = label
+        changed = True
+    if confidence is not None and box.ai_suggestion_confidence != confidence:
+        box.ai_suggestion_confidence = confidence
+        changed = True
+    if changed:
+        box.save(update_fields=["ai_suggested_label", "ai_suggestion_confidence"])
+
+
 @login_required
 @require_POST
 def api_suggest_box(request, image_id, box_id):
@@ -416,6 +440,7 @@ def api_suggest_box(request, image_id, box_id):
             status=503,
         )
 
+    _persist_suggestion(box, result)
     return JsonResponse({"box_id": str(box.id), **result})
 
 
@@ -445,6 +470,12 @@ def api_suggest_all(request, image_id):
 
     if not results:
         return JsonResponse({"suggestions": [], "error": "No trained classifier found."}, status=503)
+
+    boxes_by_id = {str(b.id): b for b in boxes}
+    for bid, r in results:
+        box = boxes_by_id.get(bid)
+        if box is not None:
+            _persist_suggestion(box, r)
 
     return JsonResponse({"suggestions": [{"box_id": bid, **r} for bid, r in results]})
 
@@ -498,6 +529,186 @@ def api_export(request, image_id):
             payload["by_category"].setdefault(cat, []).append(box.to_dict())
 
     return JsonResponse(payload)
+
+
+# ---------------------------------------------------------------------------
+# Human-in-the-loop review queue
+# ---------------------------------------------------------------------------
+
+REVIEW_ROLES = ["classifier", "researcher", "admin"]
+REVIEW_QUEUE_SIZE = 20
+REVIEW_MIX = {"uncertain": 0.70, "rare": 0.20, "high_conf": 0.10}
+
+
+def _rare_class_names():
+    """Bottom-quartile taxonomy labels by current training-eligible usage.
+
+    Returns the set of label names with the fewest examples. Empty when no
+    labels exist yet. Used to oversample rare classes in the review queue.
+    """
+    rows = list(
+        BoundingBox.objects
+        .filter(taxonomy_label__isnull=False)
+        .values("taxonomy_label__name")
+        .annotate(n=Count("id"))
+        .order_by("n")
+    )
+    if not rows:
+        return set()
+    cutoff = max(1, len(rows) // 4)
+    return {row["taxonomy_label__name"] for row in rows[:cutoff]}
+
+
+def _build_review_queue(n=REVIEW_QUEUE_SIZE):
+    """Mixed-strategy review queue.
+
+    70% uncertainty (lowest ai_suggestion_confidence), 20% rare-class
+    (suggestions for taxonomy labels currently under-represented in
+    training), 10% high-confidence (catches silent over-confidence).
+    Returns a list of (BoundingBox, stratum) pairs, deduplicated.
+    """
+    base = (BoundingBox.objects
+            .filter(is_ai_reviewed=False)
+            .exclude(ai_suggested_label="")
+            .filter(ai_suggestion_confidence__isnull=False)
+            .select_related("image"))
+
+    n_unc = int(round(n * REVIEW_MIX["uncertain"]))
+    n_rare = int(round(n * REVIEW_MIX["rare"]))
+    n_high = max(0, n - n_unc - n_rare)
+
+    picks = []
+    seen = set()
+
+    def take(qs, stratum, k):
+        for box in qs:
+            if k <= 0 or len(picks) >= n:
+                return
+            if box.id in seen:
+                continue
+            seen.add(box.id)
+            picks.append((box, stratum))
+            k -= 1
+
+    take(base.order_by("ai_suggestion_confidence")[:n_unc * 3],
+         "uncertain", n_unc)
+
+    rare = _rare_class_names()
+    if rare:
+        take(base.filter(ai_suggested_label__in=rare)
+                 .order_by("ai_suggestion_confidence")[:n_rare * 3],
+             "rare", n_rare)
+
+    take(base.order_by("-ai_suggestion_confidence")[:n_high * 3],
+         "high_conf", n_high)
+
+    return picks
+
+
+@login_required
+def review_dashboard(request):
+    """Render the HITL review page."""
+    role = get_user_role(request.user)
+    if role not in REVIEW_ROLES:
+        return HttpResponseForbidden("Not allowed")
+
+    taxonomy = list(
+        TaxonomyLabel.objects
+        .all()
+        .order_by("category", "name")
+        .values("id", "name", "category")
+    )
+    return render(request, "annotator/review.html", {
+        "role": role,
+        "taxonomy_json": json.dumps(taxonomy),
+    })
+
+
+@login_required
+def api_review_queue(request):
+    """Return the next batch of suggestions for human review."""
+    role = get_user_role(request.user)
+    if role not in REVIEW_ROLES:
+        return JsonResponse({"error": "Permission denied"}, status=403)
+
+    try:
+        n = int(request.GET.get("n", REVIEW_QUEUE_SIZE))
+    except (TypeError, ValueError):
+        n = REVIEW_QUEUE_SIZE
+    n = max(1, min(50, n))
+
+    picks = _build_review_queue(n)
+    remaining = (BoundingBox.objects
+                 .filter(is_ai_reviewed=False)
+                 .exclude(ai_suggested_label="")
+                 .count())
+
+    queue = []
+    for box, stratum in picks:
+        d = box.to_dict()
+        d["image_id"] = str(box.image_id)
+        d["image_url"] = box.image.image_url
+        d["thumbnail_url"] = box.image.thumbnail_url
+        d["original_filename"] = box.image.original_filename
+        d["stratum"] = stratum
+        queue.append(d)
+
+    return JsonResponse({"queue": queue, "remaining": remaining})
+
+
+@login_required
+@require_POST
+def api_review_confirm(request, box_id):
+    """Confirm a DINOv3 suggestion: copies ai_suggested_label into taxonomy_label."""
+    role = get_user_role(request.user)
+    if role not in REVIEW_ROLES:
+        return JsonResponse({"error": "Permission denied"}, status=403)
+
+    box = get_object_or_404(BoundingBox, pk=box_id)
+    if not box.ai_suggested_label:
+        return JsonResponse({"error": "No suggestion to confirm"}, status=400)
+
+    label = TaxonomyLabel.objects.filter(name=box.ai_suggested_label).first()
+    if label is None:
+        return JsonResponse(
+            {"error": f"Suggested label '{box.ai_suggested_label}' "
+                     "is no longer in the taxonomy"},
+            status=400,
+        )
+
+    box.taxonomy_label = label
+    box.classified_by = request.user
+    box.classified_at = timezone.now()
+    box.is_ai_reviewed = True
+    box.save(update_fields=[
+        "taxonomy_label", "classified_by", "classified_at", "is_ai_reviewed",
+    ])
+    return JsonResponse(box.to_dict())
+
+
+@login_required
+@require_POST
+def api_review_correct(request, box_id):
+    """Override a DINOv3 suggestion with the reviewer's chosen label."""
+    role = get_user_role(request.user)
+    if role not in REVIEW_ROLES:
+        return JsonResponse({"error": "Permission denied"}, status=403)
+
+    box = get_object_or_404(BoundingBox, pk=box_id)
+    data = json.loads(request.body or b"{}")
+    label_id = data.get("taxonomy_label_id")
+    if not label_id:
+        return JsonResponse({"error": "taxonomy_label_id required"}, status=400)
+    label = get_object_or_404(TaxonomyLabel, pk=label_id)
+
+    box.taxonomy_label = label
+    box.classified_by = request.user
+    box.classified_at = timezone.now()
+    box.is_ai_reviewed = True
+    box.save(update_fields=[
+        "taxonomy_label", "classified_by", "classified_at", "is_ai_reviewed",
+    ])
+    return JsonResponse(box.to_dict())
 
 
 # ---------------------------------------------------------------------------
