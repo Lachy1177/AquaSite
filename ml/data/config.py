@@ -8,7 +8,7 @@ from pathlib import Path
 from typing import List, Optional
 
 import yaml
-from pydantic import BaseModel, field_validator
+from pydantic import BaseModel
 
 
 # Project root: AquaSite/
@@ -45,22 +45,6 @@ class TrainingConfig(BaseModel):
                                         # "box"   = one sample per labeled BoundingBox (crop)
     min_box_fraction: float = 0.005     # box mode: skip boxes below this fraction of image area
 
-    @field_validator("device")
-    @classmethod
-    def resolve_device(cls, v):
-        if v == "auto":
-            import torch
-            return "cuda" if torch.cuda.is_available() else "cpu"
-        return v
-
-    @field_validator("sample_mode")
-    @classmethod
-    def check_sample_mode(cls, v):
-        v = v.lower()
-        if v not in {"image", "box"}:
-            raise ValueError(f"training.sample_mode must be 'image' or 'box', got {v!r}")
-        return v
-
 
 class EmbeddingConfig(BaseModel):
     output_dir: str = "./ml/outputs/embeddings"
@@ -71,14 +55,6 @@ class ClassifierConfig(BaseModel):
     type: str = "linear"  # "linear" | "mlp"
     hidden_dims: List[int] = []  # MLP only; ignored when type="linear"
     dropout: float = 0.3  # MLP only
-
-    @field_validator("type")
-    @classmethod
-    def check_type(cls, v):
-        v = v.lower()
-        if v not in {"linear", "mlp"}:
-            raise ValueError(f"classifier.type must be 'linear' or 'mlp', got {v!r}")
-        return v
 
 
 class MLConfig(BaseModel):
@@ -105,6 +81,26 @@ def load_config(config_path: Optional[str] = None) -> MLConfig:
         raw = yaml.safe_load(f)
 
     config = MLConfig(**raw)
+
+    # Normalise + validate fields that used to be pydantic field_validators.
+    # Pulled out so the module works on both pydantic v1 and v2.
+    if config.training.device == "auto":
+        import torch
+        config.training.device = "cuda" if torch.cuda.is_available() else "cpu"
+
+    config.training.sample_mode = config.training.sample_mode.lower()
+    if config.training.sample_mode not in {"image", "box"}:
+        raise ValueError(
+            f"training.sample_mode must be 'image' or 'box', "
+            f"got {config.training.sample_mode!r}"
+        )
+
+    config.classifier.type = config.classifier.type.lower()
+    if config.classifier.type not in {"linear", "mlp"}:
+        raise ValueError(
+            f"classifier.type must be 'linear' or 'mlp', "
+            f"got {config.classifier.type!r}"
+        )
 
     # Load secrets from environment / .env
     # python-decouple is already installed; Django settings may have loaded .env
