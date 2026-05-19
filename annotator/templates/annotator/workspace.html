@@ -1265,6 +1265,15 @@ function setupKeyboard() {
     if (CAN_BOUND && (e.key === "d" || e.key === "D")) setTool("draw");
     if (CAN_BOUND && (e.key === "e" || e.key === "E")) setTool("erase");
     if (CAN_BOUND && (e.key === "Delete" || e.key === "Backspace")) deleteSelected();
+    if ((CAN_CLASSIFY) && (e.key === "1")) applyLabel(1,'Staghorn Coral','coral');
+    if ((CAN_CLASSIFY) && (e.key === "2")) applyLabel(2,'Brain Coral','coral');
+    if ((CAN_CLASSIFY) && (e.key === "3")) applyLabel(3,'Plate Coral','coral');
+    if ((CAN_CLASSIFY) && (e.key === "4")) applyLabel(4,'Soft Coral','coral');
+    if ((CAN_CLASSIFY) && (e.key === "5")) applyLabel(5,'Bleached Coral','coral');
+    if ((CAN_CLASSIFY) && (e.key === "6")) applyLabel(6,'Reef Fish','fish');
+    if ((CAN_CLASSIFY) && (e.key === "7")) applyLabel(20,'Sand','other');
+    if ((CAN_CLASSIFY) && (e.key === "8")) applyLabel(21,'Rock','other');
+    if ((CAN_CLASSIFY) && (e.key === "9")) applyLabel(19,'Rubble','other');
     if (e.key === "Escape") { selectedId = null; renderAllBoxes(); clearPanels(); }
   });
 }
