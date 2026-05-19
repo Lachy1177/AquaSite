@@ -8,6 +8,7 @@ from django.http import JsonResponse
 from django.views.decorators.http import require_POST, require_http_methods
 from django.views.decorators.csrf import csrf_exempt
 from django.contrib.auth.decorators import login_required
+from django.contrib.auth.forms import UserCreationForm
 from django.utils import timezone
 from .supabase_storage import upload_image_to_supabase
 from .cluster_utils import assign_cluster_for_image
@@ -765,3 +766,16 @@ def get_user_role(user):
         return user.userprofile.role
     except UserProfile.DoesNotExist:
         return None
+
+
+def signup(request):
+    if request.method == "POST":
+        form = UserCreationForm(request.POST)
+        if form.is_valid():
+            from django.contrib.auth import login as auth_login
+            user = form.save()
+            auth_login(request, user)
+            return redirect("annotator:index")
+    else:
+        form = UserCreationForm()
+    return render(request, "annotator/signup.html", {"form": form})
