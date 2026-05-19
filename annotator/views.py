@@ -96,11 +96,25 @@ def index(request):
         if terms:
             images = images.filter(status="complete")
             for term in terms:
-                images = images.filter(
+                # Also match the singular form in case the term is a plural
+                # (e.g. "corals" → also try "coral")
+                singular = (
+                    term[:-1]
+                    if len(term) > 4 and term.endswith("s") and not term.endswith(("ss", "us", "is"))
+                    else term
+                )
+                q = (
                     Q(boxes__taxonomy_label__name__icontains=term) |
                     Q(boxes__taxonomy_label__category__icontains=term) |
                     Q(boxes__species_name__icontains=term)
                 )
+                if singular != term:
+                    q |= (
+                        Q(boxes__taxonomy_label__name__icontains=singular) |
+                        Q(boxes__taxonomy_label__category__icontains=singular) |
+                        Q(boxes__species_name__icontains=singular)
+                    )
+                images = images.filter(q)
             images = images.distinct()
 
     # ── Pipeline counts (all images, no filters) ─────────────────
