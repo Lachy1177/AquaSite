@@ -627,7 +627,7 @@
     {% if active_cluster %}<input type="hidden" name="cluster" value="{{ active_cluster }}">{% endif %}
     <div class="search-input-wrap">
       <span class="search-icon">⌕</span>
-      <input type="search" name="q" value="{{ search_query }}"
+      <input type="text" name="q" value="{{ search_query }}"
              placeholder="Search completed images… e.g. coral, fish, acropora"
              class="search-input" autocomplete="off">
       {% if search_query %}
