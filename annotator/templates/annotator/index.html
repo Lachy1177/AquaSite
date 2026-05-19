@@ -275,6 +275,42 @@
   .chip:hover { border-color: var(--border-hi); color: var(--text); }
   .chip.active { background: var(--accent-dim); border-color: var(--accent); color: var(--accent); }
 
+  /* Cluster search */
+  .cluster-search-form {
+    margin-left: auto;
+    display: flex;
+    align-items: center;
+    gap: 4px;
+  }
+  .cluster-input {
+    width: 52px;
+    background: var(--bg-panel);
+    border: 1px solid var(--border);
+    border-radius: 2px;
+    color: var(--text);
+    font-family: var(--mono);
+    font-size: 10px;
+    padding: 4px 8px;
+    text-align: center;
+    -moz-appearance: textfield;
+  }
+  .cluster-input::-webkit-outer-spin-button,
+  .cluster-input::-webkit-inner-spin-button { -webkit-appearance: none; margin: 0; }
+  .cluster-input:focus { outline: none; border-color: var(--accent); }
+  .cluster-total {
+    font-family: var(--mono);
+    font-size: 10px;
+    color: var(--text-dim);
+  }
+  .cluster-clear {
+    font-size: 12px;
+    color: var(--text-dim);
+    text-decoration: none;
+    padding: 0 4px;
+    line-height: 1;
+  }
+  .cluster-clear:hover { color: var(--text); }
+
   /* ─── IMAGE GRID ─────────────────────────────────────────────── */
   .image-grid {
     padding: 16px 28px 40px;
@@ -444,7 +480,7 @@
 
   <!-- "All" clears status filter -->
   <a class="pipeline-stage {% if not active_status %}active{% endif %}"
-     href="?{% if active_cluster %}cluster={{ active_cluster }}{% endif %}"
+     href="?"
      style="margin-left: auto; --stage-color: var(--text-muted);">
     <div class="stage-info">
       <div class="stage-label" style="color: var(--text-muted)">All</div>
@@ -514,21 +550,7 @@
   {% endif %}
 </div>
 
-<!-- ── CLUSTER CHIPS ───────────────────────────────────────────────── -->
-{% if clusters %}
-<div class="cluster-section">
-  <span class="cluster-label">Cluster</span>
-  <a class="chip {% if not active_cluster %}active{% endif %}"
-     href="?{% if active_status %}status={{ active_status }}{% endif %}">All</a>
-  {% for c in clusters %}
-  <a class="chip {% if active_cluster == c|stringformat:'d' %}active{% endif %}"
-     href="?{% if active_status %}status={{ active_status }}&{% endif %}cluster={{ c }}">
-    {{ c }}
-  </a>
-  {% endfor %}
-</div>
-{% endif %}
-<!-- ── CATEGORY CHIPS ──────────────────────────────────────────────── -->
+<!-- ── CATEGORY + CLUSTER SEARCH ────────────────────────────────────── -->
 <div class="cluster-section">
   <span class="cluster-label">Category</span>
   <a class="chip {% if not active_category %}active{% endif %}"
@@ -540,6 +562,22 @@
     {{ label }}
   </a>
   {% endfor %}
+  {% if clusters %}
+  <form class="cluster-search-form" method="get" action="">
+    {% if active_status %}<input type="hidden" name="status" value="{{ active_status }}">{% endif %}
+    {% if active_category %}<input type="hidden" name="category" value="{{ active_category }}">{% endif %}
+    <input type="number" name="cluster"
+           value="{{ active_cluster }}"
+           placeholder="cluster"
+           min="0" max="{{ max_cluster }}"
+           class="cluster-input">
+    <span class="cluster-total">/{{ max_cluster }}</span>
+    {% if active_cluster %}
+    <a class="cluster-clear"
+       href="?{% if active_status %}status={{ active_status }}&{% endif %}{% if active_category %}category={{ active_category }}{% endif %}">×</a>
+    {% endif %}
+  </form>
+  {% endif %}
 </div>
 
 <!-- ── IMAGE GRID ───────────────────────────────────────────────────── -->
