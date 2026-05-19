@@ -14,6 +14,7 @@ from django.utils import timezone
 from .supabase_storage import upload_image_to_supabase
 from .cluster_utils import assign_cluster_for_image
 from .search_utils import extract_search_terms
+from django.core.cache import cache
 from django.http import HttpResponseForbidden
 from .models import AnalysisImage, BoundingBox, TaxonomyLabel, UserProfile
 import time
@@ -96,39 +97,64 @@ def index(request):
         if terms:
             images = images.filter(status="complete")
             for term in terms:
-                images = images.filter(
+                # Also match the singular form in case the term is a plural
+                # (e.g. "corals" → also try "coral")
+                singular = (
+                    term[:-1]
+                    if len(term) > 4 and term.endswith("s") and not term.endswith(("ss", "us", "is"))
+                    else term
+                )
+                q = (
                     Q(boxes__taxonomy_label__name__icontains=term) |
                     Q(boxes__taxonomy_label__category__icontains=term) |
                     Q(boxes__species_name__icontains=term)
                 )
+                if singular != term:
+                    q |= (
+                        Q(boxes__taxonomy_label__name__icontains=singular) |
+                        Q(boxes__taxonomy_label__category__icontains=singular) |
+                        Q(boxes__species_name__icontains=singular)
+                    )
+                images = images.filter(q)
             images = images.distinct()
 
-    # ── Pipeline counts (all images, no filters) ─────────────────
-    pipeline_counts = {
-        row["status"]: row["count"]
-        for row in AnalysisImage.objects.order_by().values("status").annotate(count=Count("id"))
-    }
-    # Ensure all stages always present
-    for s in ("bound", "classify", "specify", "complete"):
-        pipeline_counts.setdefault(s, 0)
+    # ── Pipeline counts (cached 60s — same for all users) ────────
+    pipeline_counts = cache.get("pipeline_counts")
+    if pipeline_counts is None:
+        pipeline_counts = {
+            row["status"]: row["count"]
+            for row in AnalysisImage.objects.order_by().values("status").annotate(count=Count("id"))
+        }
+        for s in ("bound", "classify", "specify", "complete"):
+            pipeline_counts.setdefault(s, 0)
+        cache.set("pipeline_counts", pipeline_counts, 60)
 
-    # ── Clusters list ────────────────────────────────────────────
-    clusters = list(
-        AnalysisImage.objects
-        .exclude(cluster_id__isnull=True)
-        .values_list("cluster_id", flat=True)
-        .distinct()
-        .order_by("cluster_id")
-    )
+    # ── Clusters list (cached 60s — changes only when images upload) ─
+    clusters = cache.get("cluster_ids")
+    if clusters is None:
+        clusters = list(
+            AnalysisImage.objects
+            .exclude(cluster_id__isnull=True)
+            .values_list("cluster_id", flat=True)
+            .distinct()
+            .order_by("cluster_id")
+        )
+        cache.set("cluster_ids", clusters, 60)
 
-    # ── Next-in-queue shortcut for the user's own stage ──────────
+    # ── Next-in-queue shortcut (cached 30s per role) ──────────────
     user_stage = ROLE_TO_STAGE.get(role, "")
     next_in_queue = None
     queue_count   = 0
     if user_stage:
-        qs = AnalysisImage.objects.filter(status=user_stage).order_by("uploaded_at")
-        queue_count   = qs.count()
-        next_in_queue = qs.first()
+        cache_key = f"queue_{user_stage}"
+        queue_data = cache.get(cache_key)
+        if queue_data is None:
+            qs = AnalysisImage.objects.filter(status=user_stage).order_by("uploaded_at")
+            queue_count   = qs.count()
+            next_in_queue = qs.first()
+            cache.set(cache_key, (queue_count, next_in_queue), 30)
+        else:
+            queue_count, next_in_queue = queue_data
 
     # ── Pagination (60 cards per page) ────────────────────────────
     paginator   = Paginator(images, 60)

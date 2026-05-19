@@ -47,8 +47,6 @@ websockets==14.2
 yarl==1.23.0
 zstandard==0.25.0
 
-anthropic>=0.40.0
-
 # ML pipeline
 torch>=2.1.0
 torchvision>=0.16.0
