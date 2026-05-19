@@ -110,9 +110,9 @@ def index(request):
         next_in_queue = qs.first()
 
     # ── Pagination (60 cards per page) ────────────────────────────
-    total_count = images.count()
     paginator   = Paginator(images, 60)
     page_obj    = paginator.get_page(request.GET.get("page", 1))
+    total_count = paginator.count  # reuse the count Paginator already fetched
 
     CATEGORIES = [
         ("fish",          "Fish"),
