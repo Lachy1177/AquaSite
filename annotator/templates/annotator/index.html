@@ -275,6 +275,113 @@
   .chip:hover { border-color: var(--border-hi); color: var(--text); }
   .chip.active { background: var(--accent-dim); border-color: var(--accent); color: var(--accent); }
 
+  /* Cluster search */
+  .cluster-search-form {
+    margin-left: auto;
+    display: flex;
+    align-items: center;
+    gap: 4px;
+  }
+  .cluster-input {
+    width: 52px;
+    background: var(--bg-panel);
+    border: 1px solid var(--border);
+    border-radius: 2px;
+    color: var(--text);
+    font-family: var(--mono);
+    font-size: 10px;
+    padding: 4px 8px;
+    text-align: center;
+    -moz-appearance: textfield;
+  }
+  .cluster-input::-webkit-outer-spin-button,
+  .cluster-input::-webkit-inner-spin-button { -webkit-appearance: none; margin: 0; }
+  .cluster-input:focus { outline: none; border-color: var(--accent); }
+  .cluster-total {
+    font-family: var(--mono);
+    font-size: 10px;
+    color: var(--text-dim);
+  }
+  .cluster-clear {
+    font-size: 12px;
+    color: var(--text-dim);
+    text-decoration: none;
+    padding: 0 4px;
+    line-height: 1;
+  }
+  .cluster-clear:hover { color: var(--text); }
+
+  /* ─── SEMANTIC SEARCH ────────────────────────────────────────── */
+  .search-row {
+    padding: 10px 28px;
+    border-bottom: 1px solid var(--border);
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+  }
+  .search-form {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+  .search-input-wrap {
+    position: relative;
+    flex: 1;
+    display: flex;
+    align-items: center;
+  }
+  .search-icon {
+    position: absolute;
+    left: 9px;
+    font-size: 14px;
+    color: var(--text-dim);
+    pointer-events: none;
+    line-height: 1;
+  }
+  .search-input {
+    width: 100%;
+    background: var(--bg-mid);
+    border: 1px solid var(--border);
+    border-radius: 2px;
+    color: var(--text);
+    font-family: var(--mono);
+    font-size: 11px;
+    padding: 6px 28px 6px 26px;
+    outline: none;
+    transition: border-color .15s;
+  }
+  .search-input:focus { border-color: var(--accent); }
+  .search-input::placeholder { color: var(--text-dim); }
+  .search-clear {
+    position: absolute;
+    right: 8px;
+    font-size: 14px;
+    color: var(--text-dim);
+    text-decoration: none;
+    line-height: 1;
+  }
+  .search-clear:hover { color: var(--text); }
+  .search-btn {
+    background: var(--accent);
+    color: #000;
+    font-family: var(--sans);
+    font-weight: 700;
+    font-size: 11px;
+    border: none;
+    border-radius: 2px;
+    padding: 6px 14px;
+    cursor: pointer;
+    white-space: nowrap;
+    transition: opacity .15s;
+  }
+  .search-btn:hover { opacity: .85; }
+  .search-banner {
+    font-size: 10px;
+    color: var(--text-muted);
+    letter-spacing: .3px;
+  }
+  .search-banner .search-term { color: var(--accent); }
+
   /* ─── IMAGE GRID ─────────────────────────────────────────────── */
   .image-grid {
     padding: 16px 28px 40px;
@@ -444,7 +551,7 @@
 
   <!-- "All" clears status filter -->
   <a class="pipeline-stage {% if not active_status %}active{% endif %}"
-     href="?{% if active_cluster %}cluster={{ active_cluster }}{% endif %}"
+     href="?"
      style="margin-left: auto; --stage-color: var(--text-muted);">
     <div class="stage-info">
       <div class="stage-label" style="color: var(--text-muted)">All</div>
@@ -514,21 +621,29 @@
   {% endif %}
 </div>
 
-<!-- ── CLUSTER CHIPS ───────────────────────────────────────────────── -->
-{% if clusters %}
-<div class="cluster-section">
-  <span class="cluster-label">Cluster</span>
-  <a class="chip {% if not active_cluster %}active{% endif %}"
-     href="?{% if active_status %}status={{ active_status }}{% endif %}">All</a>
-  {% for c in clusters %}
-  <a class="chip {% if active_cluster == c|stringformat:'d' %}active{% endif %}"
-     href="?{% if active_status %}status={{ active_status }}&{% endif %}cluster={{ c }}">
-    {{ c }}
-  </a>
-  {% endfor %}
+<!-- ── SEMANTIC SEARCH ───────────────────────────────────────────────── -->
+<div class="search-row">
+  <form method="get" class="search-form" id="search-form">
+    {% if active_cluster %}<input type="hidden" name="cluster" value="{{ active_cluster }}">{% endif %}
+    <div class="search-input-wrap">
+      <span class="search-icon">⌕</span>
+      <input type="search" name="q" value="{{ search_query }}"
+             placeholder="Search completed images… e.g. coral, fish, acropora"
+             class="search-input" autocomplete="off">
+      {% if search_query %}
+        <a href="?{% if active_cluster %}cluster={{ active_cluster }}&{% endif %}" class="search-clear" title="Clear search">×</a>
+      {% endif %}
+    </div>
+    <button type="submit" class="search-btn" id="search-btn">Search</button>
+  </form>
+  {% if search_query %}
+  <div class="search-banner">
+    // Showing completed images matching <span class="search-term">"{{ search_query }}"</span> — {{ total_count }} result{{ total_count|pluralize }}
+  </div>
+  {% endif %}
 </div>
-{% endif %}
-<!-- ── CATEGORY CHIPS ──────────────────────────────────────────────── -->
+
+<!-- ── CATEGORY + CLUSTER SEARCH ────────────────────────────────────── -->
 <div class="cluster-section">
   <span class="cluster-label">Category</span>
   <a class="chip {% if not active_category %}active{% endif %}"
@@ -540,6 +655,22 @@
     {{ label }}
   </a>
   {% endfor %}
+  {% if clusters %}
+  <form class="cluster-search-form" method="get" action="">
+    {% if active_status %}<input type="hidden" name="status" value="{{ active_status }}">{% endif %}
+    {% if active_category %}<input type="hidden" name="category" value="{{ active_category }}">{% endif %}
+    <input type="number" name="cluster"
+           value="{{ active_cluster }}"
+           placeholder="cluster"
+           min="0" max="{{ max_cluster }}"
+           class="cluster-input">
+    <span class="cluster-total">/{{ max_cluster }}</span>
+    {% if active_cluster %}
+    <a class="cluster-clear"
+       href="?{% if active_status %}status={{ active_status }}&{% endif %}{% if active_category %}category={{ active_category }}{% endif %}">×</a>
+    {% endif %}
+  </form>
+  {% endif %}
 </div>
 
 <!-- ── IMAGE GRID ───────────────────────────────────────────────────── -->
@@ -593,7 +724,7 @@
 {% if page_obj.paginator.num_pages > 1 %}
 <div class="pagination-bar">
   {% if page_obj.has_previous %}
-  <a class="page-btn" href="?{% if active_status %}status={{ active_status }}&{% endif %}{% if active_cluster %}cluster={{ active_cluster }}&{% endif %}page={{ page_obj.previous_page_number }}">← Prev</a>
+  <a class="page-btn" href="?{% if active_status %}status={{ active_status }}&{% endif %}{% if active_cluster %}cluster={{ active_cluster }}&{% endif %}{% if search_query %}q={{ search_query }}&{% endif %}page={{ page_obj.previous_page_number }}">← Prev</a>
   {% else %}
   <span class="page-btn disabled">← Prev</span>
   {% endif %}
@@ -605,7 +736,7 @@
   </span>
 
   {% if page_obj.has_next %}
-  <a class="page-btn" href="?{% if active_status %}status={{ active_status }}&{% endif %}{% if active_cluster %}cluster={{ active_cluster }}&{% endif %}page={{ page_obj.next_page_number }}">Next →</a>
+  <a class="page-btn" href="?{% if active_status %}status={{ active_status }}&{% endif %}{% if active_cluster %}cluster={{ active_cluster }}&{% endif %}{% if search_query %}q={{ search_query }}&{% endif %}page={{ page_obj.next_page_number }}">Next →</a>
   {% else %}
   <span class="page-btn disabled">Next →</span>
   {% endif %}
@@ -653,6 +784,14 @@ document.addEventListener("drop", async e => {
 });
 {% endif %}
 
+/* ── Search loading spinner ──────────────────────────────────── */
+document.getElementById('search-form').addEventListener('submit', function () {
+  const btn = document.getElementById('search-btn');
+  const input = this.querySelector('.search-input');
+  if (!input.value.trim()) return;
+  btn.disabled = true;
+  btn.textContent = 'Searching…';
+});
 </script>
 </body>
 </html>
