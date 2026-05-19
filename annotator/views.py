@@ -1,5 +1,6 @@
 import json
 import uuid
+import threading
 from django.core.paginator import Paginator
 from django.db.models import Count
 from django.shortcuts import render, get_object_or_404, redirect
@@ -9,6 +10,7 @@ from django.views.decorators.csrf import csrf_exempt
 from django.contrib.auth.decorators import login_required
 from django.utils import timezone
 from .supabase_storage import upload_image_to_supabase
+from .cluster_utils import assign_cluster_for_image
 from django.http import HttpResponseForbidden
 from .models import AnalysisImage, BoundingBox, TaxonomyLabel, UserProfile
 import time
@@ -89,7 +91,7 @@ def index(request):
         pipeline_counts.setdefault(s, 0)
 
     # ── Clusters list ────────────────────────────────────────────
-    clusters = (
+    clusters = list(
         AnalysisImage.objects
         .exclude(cluster_id__isnull=True)
         .values_list("cluster_id", flat=True)
@@ -122,8 +124,9 @@ def index(request):
     return render(request, "annotator/index.html", {
         "page_obj":        page_obj,
         "total_count":     total_count,
-        "clusters":        list(clusters),
+        "clusters":        clusters,
         "active_cluster":  cluster_id,
+        "max_cluster":     clusters[-1] if clusters else 0,
         "active_status":   active_status,
         "active_category": active_category,
         "pipeline_counts": pipeline_counts,
@@ -160,6 +163,13 @@ def upload_image(request):
         original_filename=f.name,
         uploaded_by=request.user if request.user.is_authenticated else None,
     )
+
+    threading.Thread(
+        target=assign_cluster_for_image,
+        args=(img.id, public_url),
+        daemon=True,
+    ).start()
+
     return JsonResponse({"id": str(img.id), "redirect": f"/annotator/{img.id}/bound/"})
 
 
