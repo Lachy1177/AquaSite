@@ -1,8 +1,9 @@
 import json
+import re
 import uuid
 import threading
 from django.core.paginator import Paginator
-from django.db.models import Count
+from django.db.models import Count, Q
 from django.shortcuts import render, get_object_or_404, redirect
 from django.http import JsonResponse
 from django.views.decorators.http import require_POST, require_http_methods
@@ -12,6 +13,7 @@ from django.contrib.auth.forms import UserCreationForm
 from django.utils import timezone
 from .supabase_storage import upload_image_to_supabase
 from .cluster_utils import assign_cluster_for_image
+from .search_utils import extract_search_terms
 from django.http import HttpResponseForbidden
 from .models import AnalysisImage, BoundingBox, TaxonomyLabel, UserProfile
 import time
@@ -82,6 +84,25 @@ def index(request):
         images = images.filter(
             boxes__taxonomy_label__category=active_category
         ).distinct()
+
+    # ── Semantic search (completed images only) ──────────────────
+    search_query = request.GET.get("q", "").strip()
+    if search_query:
+        label_vocab = (
+            list(TaxonomyLabel.objects.values_list("name", flat=True))
+            + ["fish", "coral", "invertebrate", "algae", "other"]
+        )
+        terms = extract_search_terms(search_query, label_vocab)
+        if terms:
+            images = images.filter(status="complete")
+            for term in terms:
+                images = images.filter(
+                    Q(boxes__taxonomy_label__name__icontains=term) |
+                    Q(boxes__taxonomy_label__category__icontains=term) |
+                    Q(boxes__species_name__icontains=term)
+                )
+            images = images.distinct()
+
     # ── Pipeline counts (all images, no filters) ─────────────────
     pipeline_counts = {
         row["status"]: row["count"]
@@ -136,6 +157,7 @@ def index(request):
         "next_in_queue":   next_in_queue,
         "queue_count":     queue_count,
         "categories":      CATEGORIES,
+        "search_query":    search_query,
     })
 
 

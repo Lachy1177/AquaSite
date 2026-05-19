@@ -311,6 +311,77 @@
   }
   .cluster-clear:hover { color: var(--text); }
 
+  /* ─── SEMANTIC SEARCH ────────────────────────────────────────── */
+  .search-row {
+    padding: 10px 28px;
+    border-bottom: 1px solid var(--border);
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+  }
+  .search-form {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+  .search-input-wrap {
+    position: relative;
+    flex: 1;
+    display: flex;
+    align-items: center;
+  }
+  .search-icon {
+    position: absolute;
+    left: 9px;
+    font-size: 14px;
+    color: var(--text-dim);
+    pointer-events: none;
+    line-height: 1;
+  }
+  .search-input {
+    width: 100%;
+    background: var(--bg-mid);
+    border: 1px solid var(--border);
+    border-radius: 2px;
+    color: var(--text);
+    font-family: var(--mono);
+    font-size: 11px;
+    padding: 6px 28px 6px 26px;
+    outline: none;
+    transition: border-color .15s;
+  }
+  .search-input:focus { border-color: var(--accent); }
+  .search-input::placeholder { color: var(--text-dim); }
+  .search-clear {
+    position: absolute;
+    right: 8px;
+    font-size: 14px;
+    color: var(--text-dim);
+    text-decoration: none;
+    line-height: 1;
+  }
+  .search-clear:hover { color: var(--text); }
+  .search-btn {
+    background: var(--accent);
+    color: #000;
+    font-family: var(--sans);
+    font-weight: 700;
+    font-size: 11px;
+    border: none;
+    border-radius: 2px;
+    padding: 6px 14px;
+    cursor: pointer;
+    white-space: nowrap;
+    transition: opacity .15s;
+  }
+  .search-btn:hover { opacity: .85; }
+  .search-banner {
+    font-size: 10px;
+    color: var(--text-muted);
+    letter-spacing: .3px;
+  }
+  .search-banner .search-term { color: var(--accent); }
+
   /* ─── IMAGE GRID ─────────────────────────────────────────────── */
   .image-grid {
     padding: 16px 28px 40px;
@@ -550,6 +621,28 @@
   {% endif %}
 </div>
 
+<!-- ── SEMANTIC SEARCH ───────────────────────────────────────────────── -->
+<div class="search-row">
+  <form method="get" class="search-form" id="search-form">
+    {% if active_cluster %}<input type="hidden" name="cluster" value="{{ active_cluster }}">{% endif %}
+    <div class="search-input-wrap">
+      <span class="search-icon">⌕</span>
+      <input type="search" name="q" value="{{ search_query }}"
+             placeholder="Search completed images… e.g. coral, fish, acropora"
+             class="search-input" autocomplete="off">
+      {% if search_query %}
+        <a href="?{% if active_cluster %}cluster={{ active_cluster }}&{% endif %}" class="search-clear" title="Clear search">×</a>
+      {% endif %}
+    </div>
+    <button type="submit" class="search-btn" id="search-btn">Search</button>
+  </form>
+  {% if search_query %}
+  <div class="search-banner">
+    // Showing completed images matching <span class="search-term">"{{ search_query }}"</span> — {{ total_count }} result{{ total_count|pluralize }}
+  </div>
+  {% endif %}
+</div>
+
 <!-- ── CATEGORY + CLUSTER SEARCH ────────────────────────────────────── -->
 <div class="cluster-section">
   <span class="cluster-label">Category</span>
@@ -631,7 +724,7 @@
 {% if page_obj.paginator.num_pages > 1 %}
 <div class="pagination-bar">
   {% if page_obj.has_previous %}
-  <a class="page-btn" href="?{% if active_status %}status={{ active_status }}&{% endif %}{% if active_cluster %}cluster={{ active_cluster }}&{% endif %}page={{ page_obj.previous_page_number }}">← Prev</a>
+  <a class="page-btn" href="?{% if active_status %}status={{ active_status }}&{% endif %}{% if active_cluster %}cluster={{ active_cluster }}&{% endif %}{% if search_query %}q={{ search_query }}&{% endif %}page={{ page_obj.previous_page_number }}">← Prev</a>
   {% else %}
   <span class="page-btn disabled">← Prev</span>
   {% endif %}
@@ -643,7 +736,7 @@
   </span>
 
   {% if page_obj.has_next %}
-  <a class="page-btn" href="?{% if active_status %}status={{ active_status }}&{% endif %}{% if active_cluster %}cluster={{ active_cluster }}&{% endif %}page={{ page_obj.next_page_number }}">Next →</a>
+  <a class="page-btn" href="?{% if active_status %}status={{ active_status }}&{% endif %}{% if active_cluster %}cluster={{ active_cluster }}&{% endif %}{% if search_query %}q={{ search_query }}&{% endif %}page={{ page_obj.next_page_number }}">Next →</a>
   {% else %}
   <span class="page-btn disabled">Next →</span>
   {% endif %}
@@ -691,6 +784,14 @@ document.addEventListener("drop", async e => {
 });
 {% endif %}
 
+/* ── Search loading spinner ──────────────────────────────────── */
+document.getElementById('search-form').addEventListener('submit', function () {
+  const btn = document.getElementById('search-btn');
+  const input = this.querySelector('.search-input');
+  if (!input.value.trim()) return;
+  btn.disabled = true;
+  btn.textContent = 'Searching…';
+});
 </script>
 </body>
 </html>

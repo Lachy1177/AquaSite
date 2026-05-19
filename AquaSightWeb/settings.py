@@ -106,6 +106,7 @@ else:
 SUPABASE_URL = config('SUPABASE_URL', default='https://dummy.supabase.co')
 SUPABASE_KEY = config('SUPABASE_KEY', default='dummy-key')
 SUPABASE_IMAGES_BUCKET = config('SUPABASE_IMAGES_BUCKET', default='')
+ANTHROPIC_API_KEY = config('ANTHROPIC_API_KEY', default='')
 
 
 # Password validation
