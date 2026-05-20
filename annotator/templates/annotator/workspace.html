@@ -329,6 +329,30 @@
     display: block;
     max-width: 100%;
     height: auto;
+    opacity: 0;
+    transition: opacity 0.35s ease;
+  }
+
+  @keyframes shimmer {
+    0%   { background-position: -800px 0; }
+    100% { background-position:  800px 0; }
+  }
+  #canvas-shimmer {
+    position: absolute;
+    inset: 0;
+    z-index: 1;
+    background: linear-gradient(90deg, #1e1e1e 25%, #2a2a2a 50%, #1e1e1e 75%);
+    background-size: 800px 100%;
+    animation: shimmer 1.6s infinite linear;
+    pointer-events: none;
+  }
+  .box-skeleton {
+    height: 28px;
+    border-radius: 2px;
+    margin-bottom: 4px;
+    background: linear-gradient(90deg, #252525 25%, #303030 50%, #252525 75%);
+    background-size: 400px 100%;
+    animation: shimmer 1.4s infinite linear;
   }
 
   /* ─── BOUNDING BOXES ────────────────────────────────────────── */
@@ -774,6 +798,7 @@
 
     <!-- CANVAS -->
     <div class="canvas-scroll" id="canvas-scroll">
+      <div id="canvas-shimmer"></div>
       <div class="image-wrapper" id="image-wrapper">
         <img id="main-image" src="{{ image.image_url }}" alt="{{ image.original_filename }}"
              draggable="false">
@@ -894,6 +919,19 @@ function initAfterLoad() {
   imgNatH = img.naturalHeight;
   updateImgDims();
   if (!CAN_BOUND) document.getElementById("image-wrapper").classList.add("readonly");
+
+  // Fade in image, remove canvas shimmer
+  img.style.opacity = "1";
+  const shimmer = document.getElementById("canvas-shimmer");
+  if (shimmer) shimmer.remove();
+
+  // Show skeleton rows in all box lists while API fetch runs
+  const skelHTML = Array.from({length: 4}, () => '<div class="box-skeleton"></div>').join('');
+  ['box-list-left', 'classify-box-list', 'specify-box-list'].forEach(id => {
+    const el = document.getElementById(id);
+    if (el) el.innerHTML = skelHTML;
+  });
+
   loadBoxes();
   buildTaxonomyUI();
   buildCatFilters();
