@@ -751,6 +751,11 @@
           </svg>
         </button>
         <div class="tool-sep"></div>
+        <button class="dino-btn" id="auto-box-btn" onclick="autoBox()"
+                title="DINOv3 proposes boxes + AI labels in one shot. Skipped if image already has boxes.">
+          ✨ Auto-box this image
+        </button>
+        <div class="tool-sep"></div>
         <span class="tool-label">Opacity:</span>
         <input type="range" min="0" max="100" value="15" style="width:70px;accent-color:var(--accent)"
                oninput="setBoxOpacity(this.value)">
@@ -900,6 +905,17 @@ const CAT_COLORS = {
   null:        "#4a9eff",
 };
 
+// Resolve a box's category, falling back to the AI suggestion when no
+// human label has been applied yet. Returns null if neither is available.
+function categoryFor(b) {
+  if (b.taxonomy_category) return b.taxonomy_category;
+  if (b.ai_suggested_label) {
+    const m = TAXONOMY.find(t => t.name === b.ai_suggested_label);
+    if (m) return m.category;
+  }
+  return null;
+}
+
 // ── INIT ───────────────────────────────────────────────────────────
 document.addEventListener("DOMContentLoaded", async () => {
   const img = document.getElementById("main-image");
@@ -1028,13 +1044,20 @@ function renderBox(b) {
   const ph = (b.height / 100) * imgDispH;
   el.style.cssText = `left:${px}px;top:${py}px;width:${pw}px;height:${ph}px;`;
 
-  const col = CAT_COLORS[b.taxonomy_category] || CAT_COLORS.null;
+  const cat = categoryFor(b);
+  const col = CAT_COLORS[cat] || CAT_COLORS.null;
+  const aiOnly = !b.taxonomy_label && !!b.ai_suggested_label;
   el.style.background = hexAlpha(col, boxOpacity);
   el.style.borderColor = col;
+  el.style.borderStyle = aiOnly ? "dashed" : "solid";
 
   const lbl = document.createElement("div");
   lbl.className = "bbox-label";
-  lbl.textContent = b.taxonomy_label || (b.source === "dino" ? `DINO ${Math.round((b.confidence||0)*100)}%` : "manual");
+  lbl.textContent =
+    b.taxonomy_label
+    || (b.ai_suggested_label
+        ? `${b.ai_suggested_label} ${Math.round((b.ai_suggestion_confidence || 0) * 100)}%`
+        : (b.source === "dino" ? `DINO ${Math.round((b.confidence || 0) * 100)}%` : "manual"));
   lbl.style.background = col;
   lbl.style.color = lightness(col) > 0.5 ? "#000" : "#fff";
   el.appendChild(lbl);
@@ -1313,6 +1336,40 @@ async function suggestAll() {
   }
 }
 
+// ── AUTO-BOX (DINOv3 proposer + classifier in one shot) ────────────
+async function autoBox() {
+  const btn = document.getElementById("auto-box-btn");
+  if (!btn) return;
+  if (boxes && boxes.length > 0) {
+    toast("Image already has boxes. Auto-box is skipped.");
+    return;
+  }
+  btn.classList.add("loading");
+  const orig = btn.textContent;
+  btn.textContent = "Auto-boxing…";
+  try {
+    const data = await api("auto-box/", "POST");
+    if (data.error) { toast(data.error); return; }
+    if (data.skipped) {
+      toast(data.message || "Skipped: image already has boxes.");
+      return;
+    }
+    const created = data.created || 0;
+    if (created === 0) {
+      toast(data.message || "No foreground regions found.");
+      return;
+    }
+    toast(`Created ${created} auto-box${created === 1 ? '' : 'es'}. Reloading…`);
+    // Reload to fetch fresh boxes + reflect any new status.
+    setTimeout(() => location.reload(), 600);
+  } catch (e) {
+    toast(`Auto-box failed: ${e}`);
+  } finally {
+    btn.classList.remove("loading");
+    btn.textContent = orig;
+  }
+}
+
 // ── TOOL SWITCHING ─────────────────────────────────────────────────
 function setTool(t) {
   if ((t === "draw" || t === "erase") && !CAN_BOUND) {
@@ -1363,8 +1420,8 @@ function renderBoxLists() {
 }
 
 function boxListItem(b) {
-  const col = CAT_COLORS[b.taxonomy_category] || CAT_COLORS.null;
-  const name = b.taxonomy_label || b.species_name || (b.source === "dino" ? "DINO box" : "Manual box");
+  const col = CAT_COLORS[categoryFor(b)] || CAT_COLORS.null;
+  const name = b.taxonomy_label || b.species_name || b.ai_suggested_label || (b.source === "dino" ? "DINO box" : "Manual box");
   const fin = b.is_finalized ? " ✓" : "";
   return `<div class="box-item ${b.id === selectedId ? 'active' : ''}"
                onclick="selectBox('${b.id}')"

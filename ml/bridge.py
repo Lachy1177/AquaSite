@@ -205,6 +205,69 @@ def run_dino_inference_on_crops(
     return [(ids[i], _format_top_k(probs[i], top_k)) for i in range(len(ids))]
 
 
+def run_dino_auto_box(source: Union[str, bytes]) -> List[Dict]:
+    """Propose bounding boxes for one image and classify each crop.
+
+    Pipeline:
+        1. DINOv3 patch features → unsupervised foreground mask → connected-
+           components → percent bounding boxes (ml/auto_box.py).
+        2. Crop each box from the original image, feed through the existing
+           classifier head as a single batched forward pass.
+        3. Return one dict per proposed box.
+
+    Args:
+        source: frame image as a path or raw bytes.
+
+    Returns:
+        List of dicts, sorted by proposed box area descending:
+            {"bbox": (x, y, w, h),  # percent 0-100
+             "label": str | None,
+             "confidence": float,
+             "top_k": [{"label", "confidence"}, ...]}
+        `label`/`confidence`/`top_k` are absent if no classifier is trained.
+        Returns [] if no foreground was found.
+    """
+    _ensure_models_loaded()
+    if _cached_backbone is None:
+        return []
+
+    from ml.auto_box import AutoBoxConfig, propose_boxes
+
+    # Re-read config every call so edits to config.yaml's `auto_box` section
+    # take effect without restarting the Django dev server. The expensive
+    # things (backbone, classifier) stay cached at module level.
+    fresh_cfg = load_config()
+    cfg = _cached_config
+    ab_cfg = AutoBoxConfig(
+        grid=fresh_cfg.auto_box.grid,
+        padding=fresh_cfg.auto_box.padding,
+        max_boxes=fresh_cfg.auto_box.max_boxes,
+    )
+
+    img = _open_image(source)
+    boxes_pct = propose_boxes(source, _cached_backbone, ab_cfg)
+    if not boxes_pct:
+        return []
+
+    # If no classifier is loaded, return the boxes without labels.
+    if _cached_classifier is None:
+        return [{"bbox": b} for b in boxes_pct]
+
+    # Classify each proposed crop in one batched forward pass.
+    transform = get_eval_transform(cfg.model.input_size)
+    tensors = [transform(_crop_by_pct(img, b)) for b in boxes_pct]
+    batch = torch.stack(tensors)
+    embeddings = _cached_backbone.extract(batch)
+    logits = _cached_classifier(embeddings.to(cfg.training.device))
+    probs = torch.softmax(logits, dim=1)
+
+    results: List[Dict] = []
+    for i, bbox in enumerate(boxes_pct):
+        top = _format_top_k(probs[i], top_k=3)
+        results.append({"bbox": bbox, **top})
+    return results
+
+
 def get_embedding(source: Union[str, bytes]):
     """Get the raw 768-dim DINOv3 embedding for an image.
 

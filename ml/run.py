@@ -52,18 +52,32 @@ def cmd_cluster(args, config):
 
 
 def cmd_eval(args, config):
-    """Evaluate a classifier checkpoint."""
+    """Evaluate a classifier checkpoint over the FULL labelled dataset.
+
+    Important caveat
+    ----------------
+    This runs the classifier over every labelled sample in the database —
+    which means most of those samples were in the model's TRAIN split. The
+    scores you see here are therefore contaminated and will look better than
+    reality. Treat this command as a smoke check / per-class spot-check,
+    not as a fair evaluation.
+
+    For the honest held-out test score, look at the final line of the
+    training log (`ml/outputs/logs/train_*.jsonl` — the row with
+    `"epoch": "TEST"`). That score is produced by `ml.training.train` on
+    the test split after every epoch is done.
+    """
     from ml.data.dataset import build_dataset
     from ml.data.transforms import get_eval_transform
     from ml.models.backbone import DINOv3Backbone
     from ml.models.classifier import load_checkpoint
     from ml.training.evaluate import evaluate
 
-    import torch
     from torch.utils.data import DataLoader
 
+    # Resolve the checkpoint path. Default to the canonical "best by val
+    # macro-F1" file the trainer writes after every improving epoch.
     if not args.checkpoint:
-        # Try the best checkpoint
         ckpt_path = os.path.join(config.training.checkpoint_dir, "classifier_best.pt")
         if not os.path.exists(ckpt_path):
             print("No checkpoint found. Run 'train' first.")
@@ -73,7 +87,19 @@ def cmd_eval(args, config):
 
     print(f"Loading checkpoint: {ckpt_path}")
     classifier, meta = load_checkpoint(ckpt_path, device=config.training.device)
+    print(
+        f"Loaded {meta.get('classifier_type', '?')} head "
+        f"(hidden_dims={meta.get('hidden_dims', [])}, "
+        f"best_val_f1={meta.get('best_val_f1', 0.0):.4f})"
+    )
     print(f"Classes: {meta.get('class_names', [])}")
+
+    print(
+        "\nNOTE: cmd_eval scores over the FULL dataset (train+val+test) and "
+        "is therefore contaminated.\n"
+        "      For the honest test score, see the 'TEST' row in the latest "
+        "train_*.jsonl log.\n"
+    )
 
     backbone = DINOv3Backbone(
         model_name=config.model.name,
@@ -81,9 +107,10 @@ def cmd_eval(args, config):
         hf_token=config.hf_token,
     )
 
+    # Build the dataset and force the eval transform (no augmentation, just
+    # deterministic resize+normalise). build_dataset returns a dataset with
+    # the train transform attached, so we overwrite it here.
     dataset = build_dataset(config)
-    # Override with eval transform
-    from ml.data.transforms import get_eval_transform
     dataset.transform = get_eval_transform(config.model.input_size)
 
     loader = DataLoader(
@@ -95,16 +122,14 @@ def cmd_eval(args, config):
 
     metrics = evaluate(backbone, classifier, loader, device=config.training.device)
 
-    print(f"\nEvaluation Results:")
+    print(f"\nFull-dataset evaluation (CONTAMINATED — see note above):")
     print(f"  Accuracy:  {metrics['accuracy']:.4f}")
     print(f"  Macro F1:  {metrics['macro_f1']:.4f}")
     print(f"  Samples:   {metrics['num_samples']}")
 
     if metrics.get("classification_report"):
-        from sklearn.metrics import classification_report
-        # Print a formatted report
         import json
-        print(f"\n{json.dumps(metrics['classification_report'], indent=2)}")
+        print(f"\nPer-class report:\n{json.dumps(metrics['classification_report'], indent=2)}")
 
 
 def main():

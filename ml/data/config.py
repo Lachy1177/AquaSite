@@ -45,6 +45,13 @@ class TrainingConfig(BaseModel):
                                         # "box"   = one sample per labeled BoundingBox (crop)
     min_box_fraction: float = 0.005     # box mode: skip boxes below this fraction of image area
 
+    # ── Stratified train / val / test split controls ────────────────────
+    # The dataset is split *inside each class* using these fractions so
+    # train, val, and test all see proportional class representation.
+    # train_frac is implicit: 1.0 - val_frac - test_frac.
+    val_frac: float = 0.15              # share of each class held out for validation
+    test_frac: float = 0.15             # share of each class held out for final test
+
 
 class EmbeddingConfig(BaseModel):
     output_dir: str = "./ml/outputs/embeddings"
@@ -57,6 +64,13 @@ class ClassifierConfig(BaseModel):
     dropout: float = 0.3  # MLP only
 
 
+class AutoBoxConfig(BaseModel):
+    """Knobs for the auto-box tiler (ml/auto_box.py)."""
+    grid: int = 5                  # NxN grid covering the full frame (5 → 25 tiles)
+    padding: float = 0.0           # optional context padding per tile (fraction of tile side)
+    max_boxes: int = 50            # safety cap; ignored unless grid*grid exceeds it
+
+
 class MLConfig(BaseModel):
     data_source: str = "local"  # "local" | "supabase"
     local: LocalConfig = LocalConfig(image_dirs=[])
@@ -65,6 +79,7 @@ class MLConfig(BaseModel):
     training: TrainingConfig = TrainingConfig()
     embedding: EmbeddingConfig = EmbeddingConfig()
     classifier: ClassifierConfig = ClassifierConfig()
+    auto_box: AutoBoxConfig = AutoBoxConfig()
 
     # Populated from .env at load time
     supabase_url: str = ""
