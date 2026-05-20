@@ -169,7 +169,7 @@ def index(request):
         ("other",         "Other"),
     ]
 
-    return render(request, "annotator/index.html", {
+    partial_ctx = {
         "page_obj":        page_obj,
         "total_count":     total_count,
         "clusters":        clusters,
@@ -177,13 +177,20 @@ def index(request):
         "max_cluster":     clusters[-1] if clusters else 0,
         "active_status":   active_status,
         "active_category": active_category,
+        "categories":      CATEGORIES,
+        "search_query":    search_query,
+    }
+
+    if request.GET.get("partial") == "1":
+        return render(request, "annotator/index_partial.html", partial_ctx)
+
+    return render(request, "annotator/index.html", {
+        **partial_ctx,
         "pipeline_counts": pipeline_counts,
         "role":            role,
         "user_stage":      user_stage,
         "next_in_queue":   next_in_queue,
         "queue_count":     queue_count,
-        "categories":      CATEGORIES,
-        "search_query":    search_query,
     })
 
 

@@ -44,7 +44,7 @@
     display: flex; align-items: center; padding: 0 18px; gap: 18px;
   }
   .logo {
-    font-family: var(--sans); font-size: 18px; font-weight: 800;
+    font-family: var(--sans); font-size: 22px; font-weight: 800;
     letter-spacing: -0.5px; display: flex; align-items: baseline;
     text-decoration: none; color: var(--text);
   }
@@ -147,10 +147,10 @@
   }
   .btn:hover:not(:disabled) { background: var(--bg-hover); border-color: var(--border-hi); }
   .btn:disabled { opacity: 0.4; cursor: not-allowed; }
-  .btn-confirm { background: #1a2e1a; border-color: #2a4e2a; color: var(--green); }
-  .btn-confirm:hover:not(:disabled) { background: #234d23; }
-  .btn-wrong { background: #2e1a1a; border-color: #4e2a2a; color: var(--red); }
-  .btn-wrong:hover:not(:disabled) { background: #4d2323; }
+  .btn-confirm { background: #1e4a1e; border-color: #3a7a3a; color: var(--green); }
+  .btn-confirm:hover:not(:disabled) { background: #256325; }
+  .btn-wrong { background: #4a1e1e; border-color: #7a3a3a; color: var(--red); }
+  .btn-wrong:hover:not(:disabled) { background: #632525; }
   .btn .kbd {
     font-size: 9px; padding: 2px 5px; background: rgba(255,255,255,0.06);
     border-radius: 2px;
@@ -233,7 +233,7 @@
 <body>
 
 <div class="title-bar">
-  <a href="{% url 'annotator:index' %}" class="logo"><span class="a">a</span><span>s</span></a>
+  <a href="{% url 'annotator:index' %}" class="logo"><span class="a">A</span><span class="s">S</span></a>
   <span class="title-tag">Review queue</span>
   <span class="title-meta">
     Card <b id="pos">0</b> / <b id="batch-size">0</b>

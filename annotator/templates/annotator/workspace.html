@@ -614,17 +614,22 @@
     Next →
   </button>
 
-  <!-- Advance status + go to next — label and colour per stage -->
-  {% if role == "annotator" or role == "admin" and active_tab == "bound" %}
-  <button class="q-btn submit-bound" id="btn-submit-next" onclick="submitAndNext('bound')">
+  <!-- Advance status + go to next — all role-appropriate variants rendered, JS shows the right one -->
+  {% if role == "annotator" or role == "admin" %}
+  <button class="q-btn submit-bound tab-submit-btn" data-for-tab="bound"
+          onclick="submitAndNext('bound')" style="display:none">
     Send to Classify &amp; Next
   </button>
-  {% elif role == "classifier" or role == "admin" and active_tab == "classify" %}
-  <button class="q-btn submit-classify" id="btn-submit-next" onclick="submitAndNext('classify')">
+  {% endif %}
+  {% if role == "classifier" or role == "admin" %}
+  <button class="q-btn submit-classify tab-submit-btn" data-for-tab="classify"
+          onclick="submitAndNext('classify')" style="display:none">
     Send to Specify &amp; Next
   </button>
-  {% elif role == "researcher" or role == "admin" and active_tab == "specify" %}
-  <button class="q-btn submit-specify" id="btn-submit-next" onclick="submitAndNext('specify')">
+  {% endif %}
+  {% if role == "researcher" or role == "admin" %}
+  <button class="q-btn submit-specify tab-submit-btn" data-for-tab="specify"
+          onclick="submitAndNext('specify')" style="display:none">
     Mark Complete &amp; Next
   </button>
   {% endif %}
@@ -875,7 +880,8 @@ document.addEventListener("DOMContentLoaded", async () => {
   const img = document.getElementById("main-image");
   if (img.complete) initAfterLoad();
   else img.addEventListener("load", initAfterLoad);
-  setupTabUI();
+  switchTab(ACTIVE_TAB);
+  history.replaceState({ tab: ACTIVE_TAB }, '', location.href);
   setupCanvasEvents();
   setupKeyboard();
   // Load queue info asynchronously — doesn't block the annotation UI
@@ -900,23 +906,47 @@ function updateImgDims() {
 }
 
 // ── TAB UI ─────────────────────────────────────────────────────────
-function setupTabUI() {
-  const tab = ACTIVE_TAB;
-  document.querySelectorAll(".tab-panel-bound").forEach(el =>
-    el.classList.toggle("hidden", tab !== "bound"));
-  document.querySelectorAll(".tab-panel-classify").forEach(el =>
-    el.classList.toggle("hidden", tab !== "classify"));
-  document.querySelectorAll(".tab-panel-specify").forEach(el =>
-    el.classList.toggle("hidden", tab !== "specify"));
+let currentTab = ACTIVE_TAB;
 
-  const boundTools = document.getElementById("bound-tools");
-  const classifyTools = document.getElementById("classify-tools");
-  const specifyTools = document.getElementById("specify-tools");
+function switchTab(tab) {
+  currentTab = tab;
 
-  if (boundTools) boundTools.classList.toggle("hidden", tab !== "bound" || !CAN_BOUND);
-  if (classifyTools) classifyTools.classList.toggle("hidden", tab !== "classify" || !CAN_CLASSIFY);
-  if (specifyTools) specifyTools.classList.toggle("hidden", tab !== "specify" || !CAN_SPECIFY);
+  ['bound','classify','specify'].forEach(t => {
+    document.querySelectorAll('.tab-panel-' + t)
+      .forEach(el => el.classList.toggle('hidden', tab !== t));
+  });
+
+  const boundTools    = document.getElementById('bound-tools');
+  const classifyTools = document.getElementById('classify-tools');
+  const specifyTools  = document.getElementById('specify-tools');
+  if (boundTools)    boundTools.classList.toggle('hidden',    tab !== 'bound'    || !CAN_BOUND);
+  if (classifyTools) classifyTools.classList.toggle('hidden', tab !== 'classify' || !CAN_CLASSIFY);
+  if (specifyTools)  specifyTools.classList.toggle('hidden',  tab !== 'specify'  || !CAN_SPECIFY);
+
+  document.querySelectorAll('.tab').forEach(el => {
+    const href = el.getAttribute('href') || '';
+    el.classList.toggle('active', href.endsWith('/' + tab + '/'));
+  });
+
+  document.querySelectorAll('.tab-submit-btn').forEach(btn => {
+    btn.style.display = btn.dataset.forTab === tab ? '' : 'none';
+  });
 }
+
+document.addEventListener('click', function(e) {
+  const a = e.target.closest('.tab[href]');
+  if (!a) return;
+  e.preventDefault();
+  const href = a.getAttribute('href');
+  const tab = href.replace(/\/$/, '').split('/').pop();
+  const newUrl = location.pathname.replace(/\/[^/]+\/?$/, '/' + tab + '/');
+  switchTab(tab);
+  history.pushState({ tab }, '', newUrl);
+});
+
+window.addEventListener('popstate', function(e) {
+  if (e.state && e.state.tab) switchTab(e.state.tab);
+});
 
 // ── API HELPERS ────────────────────────────────────────────────────
 async function api(path, method="GET", body=null) {
