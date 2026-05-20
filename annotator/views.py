@@ -1,6 +1,8 @@
 import json
 import uuid
+from typing import List
 from django.core.paginator import Paginator
+from django.db import transaction
 from django.db.models import Count
 from django.shortcuts import render, get_object_or_404, redirect
 from django.http import JsonResponse
@@ -409,6 +411,7 @@ def _persist_suggestion(box, result):
         changed = True
     if changed:
         box.save(update_fields=["ai_suggested_label", "ai_suggestion_confidence"])
+    box.image.mark_complete_if_done()
 
 
 @login_required
@@ -478,6 +481,75 @@ def api_suggest_all(request, image_id):
             _persist_suggestion(box, r)
 
     return JsonResponse({"suggestions": [{"box_id": bid, **r} for bid, r in results]})
+
+
+@login_required
+@require_POST
+def api_auto_box(request, image_id):
+    """Generate bounding boxes + classifications from scratch using DINOv3.
+
+    Pipeline:
+        1. Skip-if-boxed: if the image already has any BoundingBox rows,
+           return a no-op response. Manual boxing wins.
+        2. Run `ml.bridge.run_dino_auto_box` → list of {bbox, label, conf, top_k}.
+        3. Bulk-create BoundingBox rows with source="dino" and the AI label
+           cached on the row.
+        4. Call image.mark_complete_if_done() — if every new box got a
+           label, the image jumps to status="complete" and qualifies for
+           the review queue.
+    """
+    role = get_user_role(request.user)
+    if role not in ["classifier", "annotator", "admin"]:
+        return JsonResponse({"error": "Permission denied"}, status=403)
+
+    image = get_object_or_404(AnalysisImage, pk=image_id)
+
+    if image.boxes.exists():
+        return JsonResponse({
+            "created": 0,
+            "skipped": True,
+            "message": "Image already has bounding boxes; auto-box is a no-op.",
+        })
+
+    img_bytes, err = _fetch_frame_bytes(image)
+    if err is not None:
+        return err
+
+    try:
+        from ml.bridge import run_dino_auto_box
+        proposals = run_dino_auto_box(img_bytes)
+    except Exception as e:
+        return JsonResponse({"error": f"Auto-box failed: {e}"}, status=500)
+
+    if not proposals:
+        return JsonResponse({
+            "created": 0,
+            "message": "No foreground regions found; no boxes created.",
+        })
+
+    created_ids: List[str] = []
+    with transaction.atomic():
+        for p in proposals:
+            x, y, w, h = p["bbox"]
+            label = p.get("label") or ""
+            conf = p.get("confidence")
+            box = BoundingBox.objects.create(
+                image=image,
+                x=x, y=y, width=w, height=h,
+                source="dino",
+                confidence=conf,
+                ai_suggested_label=label,
+                ai_suggestion_confidence=conf,
+                created_by=request.user if request.user.is_authenticated else None,
+            )
+            created_ids.append(str(box.id))
+        image.mark_complete_if_done()
+
+    return JsonResponse({
+        "created": len(created_ids),
+        "box_ids": created_ids,
+        "new_status": image.status,
+    })
 
 
 # ---------------------------------------------------------------------------
@@ -569,6 +641,7 @@ def _build_review_queue(n=REVIEW_QUEUE_SIZE):
     """
     base = (BoundingBox.objects
             .filter(is_ai_reviewed=False)
+            .filter(image__status="complete")
             .exclude(ai_suggested_label="")
             .filter(ai_suggestion_confidence__isnull=False)
             .select_related("image"))

@@ -22,6 +22,7 @@ urlpatterns = [
     # ── DINOv3 suggestions ───────────────────────────────────────────
     path("api/<uuid:image_id>/boxes/<uuid:box_id>/suggest/", views.api_suggest_box, name="api_suggest_box"),
     path("api/<uuid:image_id>/suggest-all/", views.api_suggest_all, name="api_suggest_all"),
+    path("api/<uuid:image_id>/auto-box/", views.api_auto_box, name="api_auto_box"),
 
     # ── Classification & specification ───────────────────────────────
     path("api/<uuid:image_id>/classify_many/", views.api_classify_boxes, name="api_classify_many"),

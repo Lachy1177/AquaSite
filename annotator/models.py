@@ -44,6 +44,24 @@ class AnalysisImage(models.Model):
     def __str__(self):
         return f"{self.original_filename} [{self.status}]"
 
+    def mark_complete_if_done(self):
+        """Promote status to 'complete' once every box on this image has a label.
+
+        A box counts as labelled if it has a human `taxonomy_label` OR a non-empty
+        `ai_suggested_label`. Forward-only: never demotes a 'complete' image.
+        Images with no boxes are left alone.
+        """
+        if self.status == "complete":
+            return
+        if not self.boxes.exists():
+            return
+        unlabeled = self.boxes.filter(
+            ai_suggested_label="", taxonomy_label__isnull=True
+        ).exists()
+        if not unlabeled:
+            self.status = "complete"
+            self.save(update_fields=["status"])
+
     @property
     def thumbnail_url(self):
         """

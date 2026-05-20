@@ -45,6 +45,33 @@ class DINOv3Backbone:
         # CLS token is the first token in the sequence
         return outputs.last_hidden_state[:, 0]
 
+    @torch.no_grad()
+    def extract_patches(self, pixel_values: torch.Tensor):
+        """Extract per-patch tokens for dense tasks (auto-box, segmentation).
+
+        Returns:
+            tokens: (batch, num_patches, embedding_dim) — CLS dropped.
+            grid: (grid_h, grid_w) — patch grid shape, assuming square patches.
+        """
+        pixel_values = pixel_values.to(self.device)
+        outputs = self.model(pixel_values=pixel_values)
+        # Strip CLS (and any extra register tokens DINOv3 prepends after CLS).
+        # DINOv3 ViT-B/16 from facebook/* uses CLS only; if register tokens
+        # appear in a future variant the shape check below catches it.
+        hidden = outputs.last_hidden_state  # (B, 1+N, D)
+        _, _, H, W = pixel_values.shape
+        patch_size = 16  # ViT-B/16
+        grid_h, grid_w = H // patch_size, W // patch_size
+        expected_patches = grid_h * grid_w
+        # Drop leading non-patch tokens (CLS [+ registers]).
+        non_patch = hidden.shape[1] - expected_patches
+        if non_patch < 1:
+            raise RuntimeError(
+                f"Unexpected token count {hidden.shape[1]} for grid {grid_h}x{grid_w}"
+            )
+        tokens = hidden[:, non_patch:, :]
+        return tokens, (grid_h, grid_w)
+
     @staticmethod
     def download(model_name: str, hf_token: str = None):
         """Pre-download model weights to HuggingFace cache."""
