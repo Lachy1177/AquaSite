@@ -573,58 +573,70 @@ def api_auto_box(request, image_id):
            label, the image jumps to status="complete" and qualifies for
            the review queue.
     """
-    role = get_user_role(request.user)
-    if role not in ["classifier", "annotator", "admin"]:
-        return JsonResponse({"error": "Permission denied"}, status=403)
-
-    image = get_object_or_404(AnalysisImage, pk=image_id)
-
-    if image.boxes.exists():
-        return JsonResponse({
-            "created": 0,
-            "skipped": True,
-            "message": "Image already has bounding boxes; auto-box is a no-op.",
-        })
-
-    img_bytes, err = _fetch_frame_bytes(image)
-    if err is not None:
-        return err
-
     try:
+        role = get_user_role(request.user)
+        if role not in ["classifier", "annotator", "admin"]:
+            return JsonResponse({"error": "Permission denied"}, status=403)
+
+        try:
+            image = AnalysisImage.objects.get(pk=image_id)
+        except AnalysisImage.DoesNotExist:
+            return JsonResponse({"error": "Image not found"}, status=404)
+
+        if image.boxes.exists():
+            return JsonResponse({
+                "created": 0,
+                "skipped": True,
+                "message": "Image already has bounding boxes; auto-box is a no-op.",
+            })
+
+        img_bytes, err = _fetch_frame_bytes(image)
+        if err is not None:
+            return err
+
         from ml.bridge import run_dino_auto_box
         proposals = run_dino_auto_box(img_bytes)
-    except Exception as e:
-        return JsonResponse({"error": f"Auto-box failed: {e}"}, status=500)
 
-    if not proposals:
+        if not proposals:
+            return JsonResponse({
+                "created": 0,
+                "message": "No foreground regions found; no boxes created.",
+            })
+
+        created_ids: List[str] = []
+        with transaction.atomic():
+            for p in proposals:
+                x, y, w, h = p["bbox"]
+                label = p.get("label") or ""
+                conf = p.get("confidence")
+                box = BoundingBox.objects.create(
+                    image=image,
+                    x=x, y=y, width=w, height=h,
+                    source="dino",
+                    confidence=conf,
+                    ai_suggested_label=label,
+                    ai_suggestion_confidence=conf,
+                    created_by=request.user if request.user.is_authenticated else None,
+                )
+                created_ids.append(str(box.id))
+            image.mark_complete_if_done()
+
         return JsonResponse({
-            "created": 0,
-            "message": "No foreground regions found; no boxes created.",
+            "created": len(created_ids),
+            "box_ids": created_ids,
+            "new_status": image.status,
         })
-
-    created_ids: List[str] = []
-    with transaction.atomic():
-        for p in proposals:
-            x, y, w, h = p["bbox"]
-            label = p.get("label") or ""
-            conf = p.get("confidence")
-            box = BoundingBox.objects.create(
-                image=image,
-                x=x, y=y, width=w, height=h,
-                source="dino",
-                confidence=conf,
-                ai_suggested_label=label,
-                ai_suggestion_confidence=conf,
-                created_by=request.user if request.user.is_authenticated else None,
-            )
-            created_ids.append(str(box.id))
-        image.mark_complete_if_done()
-
-    return JsonResponse({
-        "created": len(created_ids),
-        "box_ids": created_ids,
-        "new_status": image.status,
-    })
+    except Exception as e:
+        # Surface the actual server-side error to the client so production
+        # failures can be diagnosed without SSH. Tighten this once we know
+        # what's going wrong (don't ship raw tracebacks long-term).
+        import traceback
+        tb = traceback.format_exc()
+        print(f"[api_auto_box] {tb}", flush=True)
+        return JsonResponse({
+            "error": f"{type(e).__name__}: {e}",
+            "traceback_tail": tb[-1200:],
+        }, status=500)
 
 
 # ---------------------------------------------------------------------------
