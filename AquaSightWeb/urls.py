@@ -11,5 +11,6 @@ urlpatterns = [
     path('admin/', admin.site.urls),
     path("login/", auth_views.LoginView.as_view(template_name="annotator/login.html"), name="login"),
     path("logout/", auth_views.LogoutView.as_view(), name="logout"),
+    path("signup/", views.signup, name="signup"),
     path('annotator/', include('annotator.urls')),
 ] + static(settings.MEDIA_URL, document_root=settings.MEDIA_ROOT)

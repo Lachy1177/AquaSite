@@ -1,16 +1,24 @@
 import json
+import re
 import uuid
 from typing import List
 from django.core.paginator import Paginator
 from django.db import transaction
 from django.db.models import Count
+import threading
+from django.core.paginator import Paginator
+from django.db.models import Count, Q
 from django.shortcuts import render, get_object_or_404, redirect
 from django.http import JsonResponse
 from django.views.decorators.http import require_POST, require_http_methods
 from django.views.decorators.csrf import csrf_exempt
 from django.contrib.auth.decorators import login_required
+from django.contrib.auth.forms import UserCreationForm
 from django.utils import timezone
 from .supabase_storage import upload_image_to_supabase
+from .cluster_utils import assign_cluster_for_image
+from .search_utils import extract_search_terms
+from django.core.cache import cache
 from django.http import HttpResponseForbidden
 from .models import AnalysisImage, BoundingBox, TaxonomyLabel, UserProfile
 import time
@@ -81,37 +89,81 @@ def index(request):
         images = images.filter(
             boxes__taxonomy_label__category=active_category
         ).distinct()
-    # ── Pipeline counts (all images, no filters) ─────────────────
-    pipeline_counts = {
-        row["status"]: row["count"]
-        for row in AnalysisImage.objects.order_by().values("status").annotate(count=Count("id"))
-    }
-    # Ensure all stages always present
-    for s in ("bound", "classify", "specify", "complete"):
-        pipeline_counts.setdefault(s, 0)
 
-    # ── Clusters list ────────────────────────────────────────────
-    clusters = (
-        AnalysisImage.objects
-        .exclude(cluster_id__isnull=True)
-        .values_list("cluster_id", flat=True)
-        .distinct()
-        .order_by("cluster_id")
-    )
+    # ── Semantic search (completed images only) ──────────────────
+    search_query = request.GET.get("q", "").strip()
+    if search_query:
+        label_vocab = (
+            list(TaxonomyLabel.objects.values_list("name", flat=True))
+            + ["fish", "coral", "invertebrate", "algae", "other"]
+        )
+        terms = extract_search_terms(search_query, label_vocab)
+        if terms:
+            images = images.filter(status="complete")
+            for term in terms:
+                # Also match the singular form in case the term is a plural
+                # (e.g. "corals" → also try "coral")
+                singular = (
+                    term[:-1]
+                    if len(term) > 4 and term.endswith("s") and not term.endswith(("ss", "us", "is"))
+                    else term
+                )
+                q = (
+                    Q(boxes__taxonomy_label__name__icontains=term) |
+                    Q(boxes__taxonomy_label__category__icontains=term) |
+                    Q(boxes__species_name__icontains=term)
+                )
+                if singular != term:
+                    q |= (
+                        Q(boxes__taxonomy_label__name__icontains=singular) |
+                        Q(boxes__taxonomy_label__category__icontains=singular) |
+                        Q(boxes__species_name__icontains=singular)
+                    )
+                images = images.filter(q)
+            images = images.distinct()
 
-    # ── Next-in-queue shortcut for the user's own stage ──────────
+    # ── Pipeline counts (cached 60s — same for all users) ────────
+    pipeline_counts = cache.get("pipeline_counts")
+    if pipeline_counts is None:
+        pipeline_counts = {
+            row["status"]: row["count"]
+            for row in AnalysisImage.objects.order_by().values("status").annotate(count=Count("id"))
+        }
+        for s in ("bound", "classify", "specify", "complete"):
+            pipeline_counts.setdefault(s, 0)
+        cache.set("pipeline_counts", pipeline_counts, 60)
+
+    # ── Clusters list (cached 60s — changes only when images upload) ─
+    clusters = cache.get("cluster_ids")
+    if clusters is None:
+        clusters = list(
+            AnalysisImage.objects
+            .exclude(cluster_id__isnull=True)
+            .values_list("cluster_id", flat=True)
+            .distinct()
+            .order_by("cluster_id")
+        )
+        cache.set("cluster_ids", clusters, 60)
+
+    # ── Next-in-queue shortcut (cached 30s per role) ──────────────
     user_stage = ROLE_TO_STAGE.get(role, "")
     next_in_queue = None
     queue_count   = 0
     if user_stage:
-        qs = AnalysisImage.objects.filter(status=user_stage).order_by("uploaded_at")
-        queue_count   = qs.count()
-        next_in_queue = qs.first()
+        cache_key = f"queue_{user_stage}"
+        queue_data = cache.get(cache_key)
+        if queue_data is None:
+            qs = AnalysisImage.objects.filter(status=user_stage).order_by("uploaded_at")
+            queue_count   = qs.count()
+            next_in_queue = qs.first()
+            cache.set(cache_key, (queue_count, next_in_queue), 30)
+        else:
+            queue_count, next_in_queue = queue_data
 
     # ── Pagination (60 cards per page) ────────────────────────────
-    total_count = images.count()
     paginator   = Paginator(images, 60)
     page_obj    = paginator.get_page(request.GET.get("page", 1))
+    total_count = paginator.count  # reuse the count Paginator already fetched
 
     CATEGORIES = [
         ("fish",          "Fish"),
@@ -121,19 +173,28 @@ def index(request):
         ("other",         "Other"),
     ]
 
-    return render(request, "annotator/index.html", {
+    partial_ctx = {
         "page_obj":        page_obj,
         "total_count":     total_count,
-        "clusters":        list(clusters),
+        "clusters":        clusters,
         "active_cluster":  cluster_id,
+        "max_cluster":     clusters[-1] if clusters else 0,
         "active_status":   active_status,
         "active_category": active_category,
+        "categories":      CATEGORIES,
+        "search_query":    search_query,
+    }
+
+    if request.GET.get("partial") == "1":
+        return render(request, "annotator/index_partial.html", partial_ctx)
+
+    return render(request, "annotator/index.html", {
+        **partial_ctx,
         "pipeline_counts": pipeline_counts,
         "role":            role,
         "user_stage":      user_stage,
         "next_in_queue":   next_in_queue,
         "queue_count":     queue_count,
-        "categories":      CATEGORIES,
     })
 
 
@@ -162,6 +223,13 @@ def upload_image(request):
         original_filename=f.name,
         uploaded_by=request.user if request.user.is_authenticated else None,
     )
+
+    threading.Thread(
+        target=assign_cluster_for_image,
+        args=(img.id, public_url),
+        daemon=True,
+    ).start()
+
     return JsonResponse({"id": str(img.id), "redirect": f"/annotator/{img.id}/bound/"})
 
 
@@ -284,6 +352,10 @@ def api_boxes(request, image_id):
             if field not in data:
                 return JsonResponse({"error": f"Missing field: {field}"}, status=400)
 
+        coord_error = _validate_coords(data)
+        if coord_error:
+            return JsonResponse({"error": coord_error}, status=400)
+
         box = BoundingBox.objects.create(
             image=image,
             x=data["x"], y=data["y"],
@@ -310,6 +382,9 @@ def api_box_detail(request, image_id, box_id):
 
     if request.method == "PATCH":
         data = json.loads(request.body)
+        coord_error = _validate_coords(data)
+        if coord_error:
+            return JsonResponse({"error": coord_error}, status=400)
         for field in ("x", "y", "width", "height"):
             if field in data:
                 setattr(box, field, data[field])
@@ -800,6 +875,20 @@ def admin_dashboard(request):
 # Helpers
 # ---------------------------------------------------------------------------
 
+def _validate_coords(data):
+    """Return an error string if any coordinate fields in data are out of range, else None."""
+    for field in ("x", "y", "width", "height"):
+        if field not in data:
+            continue
+        try:
+            val = float(data[field])
+        except (TypeError, ValueError):
+            return f"'{field}' must be a number"
+        if not (0 <= val <= 100):
+            return f"'{field}' must be between 0 and 100"
+    return None
+
+
 def get_user_role(user):
     if not user.is_authenticated:
         return None
@@ -809,59 +898,14 @@ def get_user_role(user):
         return None
 
 
-# ---------------------------------------------------------------------------
-# Import from Supabase
-# ---------------------------------------------------------------------------
-
-@login_required
-@require_POST
-def import_from_supabase(request):
-    from supabase import create_client
-    from django.conf import settings as cfg
-
-    sb     = create_client(cfg.SUPABASE_URL, cfg.SUPABASE_KEY)
-    bucket = cfg.SUPABASE_IMAGES_BUCKET
-    folder = "dino-images"
-
-    existing_urls = set(AnalysisImage.objects.values_list("image_url", flat=True))
-
-    imported = 0
-    skipped  = 0
-    offset   = 0
-    limit    = 100
-
-    while True:
-        try:
-            items = sb.storage.from_(bucket).list(folder, {"limit": limit, "offset": offset})
-        except Exception as e:
-            return JsonResponse({"error": str(e)}, status=500)
-
-        if not items:
-            break
-
-        for item in items:
-            name = item.get("name", "")
-            if not name.lower().endswith((".jpg", ".jpeg", ".png", ".tiff", ".tif")):
-                continue
-
-            storage_path = f"{folder}/{name}"
-            public_url   = f"{cfg.SUPABASE_URL}/storage/v1/object/public/{bucket}/{storage_path}"
-
-            if public_url in existing_urls:
-                skipped += 1
-                continue
-
-            AnalysisImage.objects.create(
-                image_url=public_url,
-                original_filename=name,
-                uploaded_by=request.user,
-                status="bound",
-            )
-            existing_urls.add(public_url)
-            imported += 1
-
-        if len(items) < limit:
-            break
-        offset += limit
-
-    return JsonResponse({"imported": imported, "skipped": skipped})
+def signup(request):
+    if request.method == "POST":
+        form = UserCreationForm(request.POST)
+        if form.is_valid():
+            from django.contrib.auth import login as auth_login
+            user = form.save()
+            auth_login(request, user)
+            return redirect("annotator:index")
+    else:
+        form = UserCreationForm()
+    return render(request, "annotator/signup.html", {"form": form})

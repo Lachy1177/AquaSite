@@ -449,6 +449,161 @@ Resize — Was clearing resizeBoxSnapshot before using it to look up the box in 
 
 All three — Replaced the cached imgDispW/H with getFreshDims() which reads offsetWidth/Height live from the element each time. If the window was resized since page load, the stale cache would give wrong coordinates.
 
------------------------------
 
 -----------------------------
+Here's a summary of what was built and decided in this conversation:
+What was built
+A Django app called annotator — a Photoshop-style marine image annotation tool with three workflow tabs: Bound, Classify, and Specify.
+Key design decisions
+Architecture
+
+Self-contained Django app that drops into any existing project
+SQLite for local dev, Supabase PostgreSQL for production, controlled by .env
+Bounding boxes stored as percentages (0–100) of image dimensions, so they're resolution-independent
+Soft-delete on boxes rather than hard delete, so mistakes are recoverable
+
+Bounding tab
+
+DINOv3 detection stubbed out — generates random boxes for UI development, with the real endpoint implementation written but commented out ready to swap in
+Draw, select, and erase tools with keyboard shortcuts (V/D/E)
+Boxes draggable and resizable with corner handles
+
+Classify tab
+
+AI suggestion via Claude API stubbed the same way as DINO — real implementation written and commented out
+Taxonomy labels loaded from database (controlled vocabulary), seeded with common marine species across fish, coral, invertebrate, algae, other categories
+Both AI suggestion and manual taxonomy picker work together
+
+Specify tab
+
+Boxes routed by category — coral boxes go to coral researchers, fish boxes to fish researchers etc.
+Free-text species name and researcher notes fields
+Finalise toggle to lock a box as complete
+
+Export
+
+Single JSON endpoint that returns all boxes plus a by_category dict grouping finalised boxes by type — the hook for downstream ML pipelines and researcher routing
+
+Setup issues resolved
+
+Windows Store Python 3.7 conflicting with venv Python 3.11 — fixed by always using .\venv\Scripts\python.exe explicitly
+Pillow not found despite being installed — caused by same Python version mismatch
+Templates in wrong folder — moved to annotator/templates/annotator/
+Supabase connection — wrong region (ap-southeast-2 → ap-northeast-1) and wrong port (6543 → 5432)
+Taxonomy not showing in classify tab — labels needed to be re-seeded after switching from SQLite to Supabase
+-----------------------------
+Shared the DB schema and migration file, asked how to add the migration and create an account
+Shared server logs, said the server was really slow and wouldn't let them log in
+Shared views.py and admin.py code (no question, just context)
+Shared models.py code (no question, just context)
+Shared shell output with a traceback from typing your_superuser_username literally
+Shared logs showing login POST 302, said "It wont log me in"
+Shared settings.py, no message
+Shared annotator/urls.py, no message
+Shared AquaSightWeb/urls.py, no message
+Got TemplateDoesNotExist error for annotator/login.html
+Got Internal Server Error traceback, then "no"
+Said "no more logs, same url, it just seems like its loading"
+Shared a browser network tab screenshot
+Shared tests.py, asked to fix them to work with an account
+Shared the README draft, asked to format it for GitHub MD and add account creation/modification docs
+----------------------------
+[uploaded files — README]
+[uploaded files — all source files]
+[uploaded cluster_summary.json] "I want to properly implement the "upload" feature. it should have a file select to upload a Json, which will look similar to this file. It will also have a video file selector, however this is for video files on the supabase DB not for a local file. it should take the representation image frames from the video file and use that. please make it so that in future there is a little "next image" button for each of the tabs, as they are kind of meant to be used in a long session, not switching between one another. essentially one person will sit there and bound the images, Ideally adding it to a queue on the DB and then another will classify ect. this bit doesn't need to be implemented yet, but keep it in mind."
+[error log] (no message, just the traceback)
+[error log] (no message, just the traceback)
+[error log] (no message, just the traceback)
+"ProgrammingError at /annotator/ ..."
+[migration error] (no message)
+"ProgrammingError at /annotator/ ..."
+"is it because it is trying to connect to supabase?"
+[shell traceback] (no message)
+"ok working now, they are actual videos, not just a collection of images btw..."
+"real quick, how do i make the default "dive-videos""
+"my friend says we can just do photos!"
+"explain it to me?"
+--------------------------
+(Pasted error output about hf-cli and uvx not being recognized)
+(Pasted error output about huggingface-cli being deprecated and hf login failing)
+"Add token as git credential? [y/N]:"
+"give me all my prompts in this session"
+--------------------------
+Fix clustering UI and introduce 3-stage pipeline (bound → classify → specify) with queue system and "next image" button
+Fix pipeline counts bug at top of index page (showing wrong totals)
+Speed up page load by not loading all thumbnails
+Setup steps to put this on AWS
+Explain Step 2 (DNS) for VentraIP
+GitHub repo is https://github.com/Lachy1177/AquaSite
+Getting "repo not found" error on git clone
+manage.py is at /home/ubuntu/app/manage.py
+Getting OSError no space left on device
+/dev/xvda does not exist (wrong device name)
+What else do I need to do (continuing setup)
+Migration error — cluster_id column already exists
+What do I paste in the service file
+Gunicorn 203/EXEC error
+Certbot failed — domain not pointing to EC2 yet
+Getting 502 Bad Gateway
+Permission denied on socket fix
+What to do on a git update
+Can GitHub run the deploy automatically
+Certbot — www not in server_name
+What is my SSH command with pem file
+How to log into Hugging Face
+Still not working despite being logged in
+How to restart the website
+Inference failed — gated repo error
+Token variable name mismatch (HUGGING_FACE_TOKEN vs HUGGINGFACE_TOKEN)
+Same error after fix
+Model downloads successfully with token hardcoded
+Says no trained classifier found
+How to send classifier_best.pt from local machine to server
+------------------------
+Why won't this urls.py go to index.html? Getting "Not Found" at base URL
+Shared project-level urls.py
+I want to go to index.html
+I want just index on the base URL, rest on /annotator/
+Shared updated urls.py with views.landing
+Shared full views.py
+It works locally but not on production
+AWS with nginx and gunicorn
+I ran ./deploy.sh, what should I do now?
+Looks like git pull didn't pull the HTML?
+Shared git log — seems one behind, is that normal?
+Shared git stash pop conflict in settings.py
+Shared the conflict: LOGOUT_REDIRECT_URL = "/" vs "/login/"
+Ok now deploy?
+Make this login.html look better (shared bare login + landing for context)
+Git pull failing due to unmerged files, can I stop it checking settings?
+Got "divergent branches" error on git pull
+Give me all my prompts condensed here
+----------------------
+Here are all your messages from this conversation:
+
+A list of GitHub commits from Apr 13 – May 11, 2026, asking for a short changelog page documenting changes from the past 4 weeks, noting you could provide more info on vague commits.
+An upload of AquaSite-main.zip, asking for a markdown file that incorporates a set of headline changes (the 3-phase pipeline, optimisations by Connor/MingXuan/Jack, homepage by Mohammad, login page by Jack, and the AWS/aquasight.au deployment), plus a file structure overview.
+"give me all my prompts condensed here"
+----------------------
+"The server isn't seeming to be running properly, I can't access the website"
+[pasted ps aux and ss output]
+[pasted nginx status, error logs, socket, journalctl, nginx config]
+"It's still not working..."
+[pasted error log]
+"This site can't be reached / aquasight.au unexpectedly closed the connection. ERR_CONNECTION_CLOSED"
+[pasted curl -I http://localhost output]
+[pasted curl -Ik https://aquasight.au output — 200 OK]
+"This is strange cuz we havent made a change since last night when it worked"
+[pasted curl ifconfig.me and nslookup output]
+"Seems UQ's network is blocking it, is there a workaround?"
+"give me all my prompts condensed here"
+"give me my exact messages and a summary"
+
+
+Summary:
+You couldn't access your Django/nginx server after a deploy. The deploy script had a git pull failure but continued. Gunicorn and nginx were both running fine. The real issue was nginx couldn't read static files due to file permissions, which was fixed with chmod. The site was actually working the whole time — the problem was UQ's university network blocking the connection.
+------------------------
+
+##################################################
+END OF Jack's AI USAGE
+##################################################

@@ -41,5 +41,4 @@ urlpatterns = [
 
     # ── Admin ────────────────────────────────────────────────────────
     path("admin-dashboard/", views.admin_dashboard, name="admin_dashboard"),
-    path("import-supabase/", views.import_from_supabase, name="import_supabase"),
 ]
