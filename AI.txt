@@ -606,4 +606,101 @@ You couldn't access your Django/nginx server after a deploy. The deploy script h
 
 ##################################################
 END OF Jack's AI USAGE
+
+
+##################################################
+LACHLAN'S AI USAGE
+##################################################
+
+-----------------------------------------
+Claude AI with Lachlan 31/3/26 data pipeline
+-----------------------------------------
+
+
+Prompts:
+- Explain the current workflow breakdown of the djanjo and supabase structure
+- How do i Pull raw MP4 dive clips out of the Supabase 'dive-videos' bucket; extract frames at a fixed FPS
+- Build a bulk_import management command that walks the staged frames, uploads to Supabase storage, and writes AnalysisImage rows with cluster_id from the clustering pass
+- Due to DinoV3 working with embeddings is it best to filter the dino by k means clustering. If so give any supporting evidence on the embeddings
+- How should i structure the ML pipeline with the already given annotator code.
+
+Summary:
+Built scripts/extract_frames.py + scripts/extract_bags.py for raw ingestion, Wired Supabase storage as the authoritative image store. The bulk_import command walks the staged folder, uploads to storage, and writes AnalysisImage rows tagged with the cluster_id
+
+
+-----------------------------------------
+Claude AI with Lachlan @ mid 10/4/26— DINOv3 frozen backbone + bridge to Django
+-----------------------------------------
+
+[Wrap DINOv3 ViT-B/16 as a frozen feature extractor, cache it at module level, expose inference functions that Django views can call cheaply]
+
+Prompts:
+- I Have dinov3 backbone model from huggingface how can i attached it to my web structure. Have a look at my current directory and explain to me how
+- HuggingFace transformers AutoModel pulls facebook/dinov3-vitb16-pretrain-lvd1689m
+- It's a gated model — HF_TOKEN required on first fetch
+- The CLS token is 768-d; that's the embedding we want
+- Build a bridge module so Django views don't reload the ViT per request — module-level cache
+- Need three entry points: whole-image classify, single-box crop classify, batched many-box classify
+- _crop_by_pct helper: percentage-coordinate BoundingBox → PIL.Image crop, matching how the dataset loader crops at training time
+- Also expose get_embedding() for the workspace's similarity-search feature
+
+Summary:
+Built ml/models/backbone.py with DINOv3Backbone (HF AutoModel under the hood, all parameters frozen, eval mode, CLS-token extract by default). Built ml/bridge.py with _ensure_models_loaded() that caches backbone + classifier + class_names at module level — first request to any endpoint pays the ~327 MB load cost; subsequent requests reuse the in-memory copies. Exposed run_dino_inference, run_dino_inference_on_crop, run_dino_inference_on_crops, and get_embedding. Django endpoints (api_suggest_box, api_suggest_all, api_classify_box) call these.
+
+-----------------------------------------
+Claude AI with Lachlan  10/5/26 MLP classifier head + class weighting + HITL review queue
+-----------------------------------------
+
+[Train a small classifier on top of frozen DINOv3 features; fix class imbalance and unreproducible splits; build a stratified human-in-the-loop review queue]
+
+Prompts:
+- Backbone is frozen — train a small head on the 768-d CLS embedding to classify box crops
+- Two heads: LinearClassifier (LayerNorm → Linear) and MLPClassifier (LayerNorm → Linear → GELU → Dropout → Linear). build_classifier factory picks based on config.classifier.type
+- Training data: per-box crops (sample_mode="box"), min_box_fraction=0.005 to drop tiny boxes
+- 70/15/15 stratified split inside each class so train/val/test all see proportional class representation
+- Tag checkpoint filenames with classifier type — classifier_{type}_best.pt and classifier_{type}_epoch_NNN.pt. Also keep classifier_best.pt as the canonical alias that the bridge reads
+- HITL review queue — which boxes should the human actually look at?
+  - Stratified queue: 70% lowest-confidence (uncertain), 20% rare-class (under-represented in training), 10% highest-confidence (catches silent over-confidence)
+  - _rare_class_names(): bottom-quartile classes by current box count
+  - is_ai_reviewed BooleanField + migration 0006 — queue-exclusion flag so a confirmed box never gets queued twice
+- populate_ai_suggestions management command — bulk-write ai_suggested_label across every unclassified box so the queue has something to draw on
+- /annotator/review/ page: split layout (full frame left, zoomed crop right, 15% context padding), keyboard shortcuts Y/N/W/1-9/Esc/R for fast review
+
+Summary:
+Built ml/models/classifier.py (LinearClassifier + MLPClassifier + build_classifier + load_checkpoint), ml/training/train.py 
+(per-epoch JSONL logging + val-split early stopping on macro-F1 + class-weighted CE), ml/data/dataset.py 
+(AquaSiteImageDataset + AquaSiteBoxDataset, 
+ml/run.py with cmd_train / cmd_eval / cmd_embed / cmd_cluster subcommands. 
+Best honest val macro-F1: MLP 0.6624 @ epoch 14, Linear 0.6232 @ epoch 13 on a 54-sample val split
+
+
+-----------------------------------------
+Claude AI with Lachlan @ 15/5/26 auto-box tiler + review-queue completeness gating + production deployment debug
+-----------------------------------------
+Prompts: - 
+
+- Review queue should only draw from "complete" images. AI-classifying a frame is complete enough since we just need training data
+- Status doesn't auto-advance on AI suggestion right now — add a mark_complete_if_done() method on AnalysisImage that promotes when every box has either a taxonomy_label or a non-empty ai_suggested_label. Call from _persist_suggestion (UI flow) and populate_ai_suggestions (bulk)
+- My idea is 32x32 sliding window with classification per tile
+  (talked out of that — DINOv3 needs whole-image context; 32×32 on a 1920×1080 frame would be ~2000 forward passes. Better options: DINOv3 patch-foreground (cheap), FastSAM (best but +140 MB dep), or uniform tiling.)
+- Bump to 8×8 = 64 tiles for finer coverage
+- Why don't the AI labels show on the boxes? (Workspace overlay was rendering "DINO XX%" — the source field + confidence — instead of the actual ai_suggested_label. Fixed at workspace.html:972 to fall through to ai_suggested_label when no human confirmation yet.)
+- Colour boxes by AI category before human confirmation, like classify tab does. (Added categoryFor() helper that resolves taxonomy_category first, then looks up ai_suggested_label in TAXONOMY. Dashed border = AI-suggested, solid = human-confirmed.)
+- Production: "Auto-box failed: SyntaxError: The string did not match the expected pattern." Other browser: "Unexpected token '<', '<html>...' is not valid JSON"
+  (Server returning HTML instead of JSON. JSON.parse fails on the leading '<' of the HTML error page.)
+- Wrap api_auto_box body in an outer try/except so unexpected server-side errors return JSON instead of bubbling to Django's default HTML 500 page
+- Deployed the fix — same error, no change in toast text
+  (Either the deploy didn't restart gunicorn, OR the failure happens before any view code runs.)
+-:Pulled DevTools network tab: status 500, 30.22 seconds, generic "Internal Server Error" HTML body
+  (Smoking gun: 30.22s is exactly gunicorn's default worker timeout. The worker was being SIGKILL'd mid-request — that's an OS signal, not a Python exception, so my outer try/except can't catch it. The endpoint was loading DINOv3 (~327 MB) and running 64 classifications on a CPU-only EC2, which exceeded the timeout.)
+
+- Drop all ML inference from api_auto_box. Just create empty tiles via propose_boxes (pure NumPy/Python, no torch). Cut the grid to 4×4 = 16 tiles. Classification happens separately when the user clicks "classify all unclassified" on the classify tab (which only has 16 boxes to do per image — well under the timeout once DINOv3 is cached in the worker).
+
+Summary:
+Assited in ml/auto_box.py — a uniform NxN tiler that returns full-frame coverage as percent bounding boxes. 
+Wired into a new api_auto_box endpoint behind a "✨ Auto-box this image" button in the workspace bound-stage toolbar. 
+Endpoint skips if the image already has any boxes (manual boxing wins). Added AnalysisImage.mark_complete_if_done() that auto-promotes status to "complete" once every box on the image has a taxonomy_label or non-empty ai_suggested_label.
+
+##################################################
+END OF Lachlan's AI USAGE
 ##################################################
