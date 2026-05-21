@@ -590,41 +590,33 @@ def api_auto_box(request, image_id):
                 "message": "Image already has bounding boxes; auto-box is a no-op.",
             })
 
-        img_bytes, err = _fetch_frame_bytes(image)
-        if err is not None:
-            return err
-
-        from ml.bridge import run_dino_auto_box
-        proposals = run_dino_auto_box(img_bytes)
-
-        if not proposals:
-            return JsonResponse({
-                "created": 0,
-                "message": "No foreground regions found; no boxes created.",
-            })
+        # Generate uniform tiles only. We deliberately do NOT load DINOv3
+        # or run the classifier here — on EC2 that takes longer than
+        # gunicorn's 30-second worker timeout and the process gets killed.
+        # The classify tab handles labelling as a separate user action.
+        from ml.auto_box import AutoBoxConfig, propose_boxes
+        bboxes = propose_boxes(cfg=AutoBoxConfig(grid=4))
 
         created_ids: List[str] = []
         with transaction.atomic():
-            for p in proposals:
-                x, y, w, h = p["bbox"]
-                label = p.get("label") or ""
-                conf = p.get("confidence")
+            for x, y, w, h in bboxes:
                 box = BoundingBox.objects.create(
                     image=image,
                     x=x, y=y, width=w, height=h,
                     source="dino",
-                    confidence=conf,
-                    ai_suggested_label=label,
-                    ai_suggestion_confidence=conf,
                     created_by=request.user if request.user.is_authenticated else None,
                 )
                 created_ids.append(str(box.id))
-            image.mark_complete_if_done()
+            # All new boxes are unlabelled, so mark_complete_if_done is a no-op.
 
         return JsonResponse({
             "created": len(created_ids),
             "box_ids": created_ids,
             "new_status": image.status,
+            "message": (
+                f"Created {len(created_ids)} tiles. "
+                "Switch to the Classify tab and hit 'Classify all unclassified' to label them."
+            ),
         })
     except Exception as e:
         # Surface the actual server-side error to the client so production

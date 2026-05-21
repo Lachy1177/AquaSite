@@ -1057,7 +1057,9 @@ function renderBox(b) {
     b.taxonomy_label
     || (b.ai_suggested_label
         ? `${b.ai_suggested_label} ${Math.round((b.ai_suggestion_confidence || 0) * 100)}%`
-        : (b.source === "dino" ? `DINO ${Math.round((b.confidence || 0) * 100)}%` : "manual"));
+        : (b.source === "dino"
+            ? (b.confidence != null ? `DINO ${Math.round(b.confidence * 100)}%` : "tile")
+            : "manual"));
   lbl.style.background = col;
   lbl.style.color = lightness(col) > 0.5 ? "#000" : "#fff";
   el.appendChild(lbl);
@@ -1359,9 +1361,10 @@ async function autoBox() {
       toast(data.message || "No foreground regions found.");
       return;
     }
-    toast(`Created ${created} auto-box${created === 1 ? '' : 'es'}. Reloading…`);
-    // Reload to fetch fresh boxes + reflect any new status.
-    setTimeout(() => location.reload(), 600);
+    toast(data.message || `Created ${created} auto-box${created === 1 ? '' : 'es'}. Reloading…`);
+    // Reload so the new boxes are visible. Slightly longer delay so the
+    // user has time to read the "switch to Classify tab" hint.
+    setTimeout(() => location.reload(), 1500);
   } catch (e) {
     toast(`Auto-box failed: ${e}`);
   } finally {
