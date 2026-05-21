@@ -14,6 +14,7 @@
 <div id="dynamic-search" class="search-row">
   <form method="get" class="search-form">
     {% if active_cluster %}<input type="hidden" name="cluster" value="{{ active_cluster }}">{% endif %}
+    {% if active_dive %}<input type="hidden" name="dive" value="{{ active_dive }}">{% endif %}
     <div class="search-input-wrap">
       <span class="search-icon">⌕</span>
       <input type="text" name="q" value="{{ search_query }}"
@@ -35,10 +36,10 @@
 <div id="dynamic-chips" class="cluster-section">
   <span class="cluster-label">Category</span>
   <a class="chip {% if not active_category %}active{% endif %}"
-     href="?{% if active_status %}status={{ active_status }}&{% endif %}{% if active_cluster %}cluster={{ active_cluster }}&{% endif %}">All</a>
+     href="?{% if active_status %}status={{ active_status }}&{% endif %}{% if active_cluster %}cluster={{ active_cluster }}&{% endif %}{% if active_dive %}dive={{ active_dive }}&{% endif %}">All</a>
   {% for cat, label in categories %}
   <a class="chip {% if active_category == cat %}active{% endif %}"
-     href="?{% if active_status %}status={{ active_status }}&{% endif %}{% if active_cluster %}cluster={{ active_cluster }}&{% endif %}category={{ cat }}"
+     href="?{% if active_status %}status={{ active_status }}&{% endif %}{% if active_cluster %}cluster={{ active_cluster }}&{% endif %}{% if active_dive %}dive={{ active_dive }}&{% endif %}category={{ cat }}"
      style="--chip-color: {{ cat|lower }}">
     {{ label }}
   </a>
@@ -47,6 +48,7 @@
   <form class="cluster-search-form" method="get" action="">
     {% if active_status %}<input type="hidden" name="status" value="{{ active_status }}">{% endif %}
     {% if active_category %}<input type="hidden" name="category" value="{{ active_category }}">{% endif %}
+    {% if active_dive %}<input type="hidden" name="dive" value="{{ active_dive }}">{% endif %}
     <input type="number" name="cluster"
            value="{{ active_cluster }}"
            placeholder="cluster"
@@ -55,9 +57,23 @@
     <span class="cluster-total">/{{ max_cluster }}</span>
     {% if active_cluster %}
     <a class="cluster-clear"
-       href="?{% if active_status %}status={{ active_status }}&{% endif %}{% if active_category %}category={{ active_category }}{% endif %}">×</a>
+       href="?{% if active_status %}status={{ active_status }}&{% endif %}{% if active_category %}category={{ active_category }}&{% endif %}{% if active_dive %}dive={{ active_dive }}{% endif %}">×</a>
     {% endif %}
   </form>
+  {% endif %}
+
+  {% if dives %}
+  <div style="width:100%;display:flex;align-items:center;gap:6px;flex-wrap:wrap;padding-top:6px">
+    <span class="cluster-label">Dive</span>
+    <a class="chip {% if not active_dive %}active{% endif %}"
+       href="?{% if active_status %}status={{ active_status }}&{% endif %}{% if active_cluster %}cluster={{ active_cluster }}&{% endif %}{% if active_category %}category={{ active_category }}&{% endif %}">All</a>
+    {% for dive in dives %}
+    <a class="chip {% if active_dive == dive.id %}active{% endif %}"
+       href="?{% if active_status %}status={{ active_status }}&{% endif %}{% if active_cluster %}cluster={{ active_cluster }}&{% endif %}{% if active_category %}category={{ active_category }}&{% endif %}dive={{ dive.id }}">
+      {{ dive.name }}
+    </a>
+    {% endfor %}
+  </div>
   {% endif %}
 </div>
 
@@ -97,7 +113,7 @@
 {% if page_obj.paginator.num_pages > 1 %}
 <div id="dynamic-pagination" class="pagination-bar">
   {% if page_obj.has_previous %}
-  <a class="page-btn" href="?{% if active_status %}status={{ active_status }}&{% endif %}{% if active_cluster %}cluster={{ active_cluster }}&{% endif %}{% if search_query %}q={{ search_query }}&{% endif %}page={{ page_obj.previous_page_number }}">← Prev</a>
+  <a class="page-btn" href="?{% if active_status %}status={{ active_status }}&{% endif %}{% if active_cluster %}cluster={{ active_cluster }}&{% endif %}{% if active_dive %}dive={{ active_dive }}&{% endif %}{% if search_query %}q={{ search_query }}&{% endif %}page={{ page_obj.previous_page_number }}">← Prev</a>
   {% else %}
   <span class="page-btn disabled">← Prev</span>
   {% endif %}
@@ -109,7 +125,7 @@
   </span>
 
   {% if page_obj.has_next %}
-  <a class="page-btn" href="?{% if active_status %}status={{ active_status }}&{% endif %}{% if active_cluster %}cluster={{ active_cluster }}&{% endif %}{% if search_query %}q={{ search_query }}&{% endif %}page={{ page_obj.next_page_number }}">Next →</a>
+  <a class="page-btn" href="?{% if active_status %}status={{ active_status }}&{% endif %}{% if active_cluster %}cluster={{ active_cluster }}&{% endif %}{% if active_dive %}dive={{ active_dive }}&{% endif %}{% if search_query %}q={{ search_query }}&{% endif %}page={{ page_obj.next_page_number }}">Next →</a>
   {% else %}
   <span class="page-btn disabled">Next →</span>
   {% endif %}

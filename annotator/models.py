@@ -24,6 +24,22 @@ class TaxonomyLabel(models.Model):
         ordering = ["category", "name"]
 
 
+class Dive(models.Model):
+    """Read-only view of the dives table created by the ROS bag ingestion scripts."""
+    id = models.UUIDField(primary_key=True)
+    name = models.TextField()
+    recorded_at = models.DateTimeField(null=True)
+    bag_dir = models.TextField()
+    created_at = models.DateTimeField(null=True)
+
+    class Meta:
+        managed = False
+        db_table = "dives"
+
+    def __str__(self):
+        return self.name
+
+
 class AnalysisImage(models.Model):
     """An image submitted for analysis."""
     STATUS_CHOICES = [
@@ -39,6 +55,11 @@ class AnalysisImage(models.Model):
     uploaded_at = models.DateTimeField(auto_now_add=True)
     status = models.CharField(max_length=16, choices=STATUS_CHOICES, default="bound")
     cluster_id = models.IntegerField(null=True, blank=True, help_text="DINOv3 embedding cluster assignment")
+    dive = models.ForeignKey(
+        Dive, on_delete=models.SET_NULL,
+        null=True, blank=True, related_name="images",
+        help_text="Dive session this image was extracted from; null for manually uploaded images",
+    )
     notes = models.TextField(blank=True)
 
     def __str__(self):
