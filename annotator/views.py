@@ -20,7 +20,7 @@ from .cluster_utils import assign_cluster_for_image
 from .search_utils import extract_search_terms
 from django.core.cache import cache
 from django.http import HttpResponseForbidden
-from .models import AnalysisImage, BoundingBox, TaxonomyLabel, UserProfile
+from .models import AnalysisImage, BoundingBox, TaxonomyLabel, UserProfile, Dive
 import time
 
 
@@ -83,12 +83,17 @@ def index(request):
             images = images.filter(cluster_id=int(cluster_id))
         except ValueError:
             cluster_id = ""
-     # ── Category filter ──────────────────────────────────────────
+    # ── Category filter ──────────────────────────────────────────
     active_category = request.GET.get("category", "")
     if active_category:
         images = images.filter(
             boxes__taxonomy_label__category=active_category
         ).distinct()
+
+    # ── Dive filter ──────────────────────────────────────────────
+    active_dive = request.GET.get("dive", "")
+    if active_dive:
+        images = images.filter(dive_id=active_dive)
 
     # ── Semantic search (completed images only) ──────────────────
     search_query = request.GET.get("q", "").strip()
@@ -145,6 +150,18 @@ def index(request):
         )
         cache.set("cluster_ids", clusters, 60)
 
+    # ── Dives list (cached 300s — rarely changes) ─────────────────
+    dives = cache.get("dives_list")
+    if dives is None:
+        try:
+            dives = [
+                {"id": str(d.id), "name": d.name}
+                for d in Dive.objects.order_by("recorded_at")
+            ]
+        except Exception:
+            dives = []
+        cache.set("dives_list", dives, 300)
+
     # ── Next-in-queue shortcut (cached 30s per role) ──────────────
     user_stage = ROLE_TO_STAGE.get(role, "")
     next_in_queue = None
@@ -181,6 +198,8 @@ def index(request):
         "max_cluster":     clusters[-1] if clusters else 0,
         "active_status":   active_status,
         "active_category": active_category,
+        "active_dive":     active_dive,
+        "dives":           dives,
         "categories":      CATEGORIES,
         "search_query":    search_query,
     }
