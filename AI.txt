@@ -704,3 +704,106 @@ Endpoint skips if the image already has any boxes (manual boxing wins). Added An
 ##################################################
 END OF Lachlan's AI USAGE
 ##################################################
+
+##################################################
+MING XUAN'S AI USAGE
+##################################################
+
+-----------------------------------------
+Claude AI with MING XUAN @ 30/3/2026
+-----------------------------------------
+ 
+[Analysing ROS1 bag topic listings from EddyReef2 underwater glider survey data]
+ 
+Prompts:
+- Uploaded topics.txt (output of rosbag info / rosbags-info across all EddyReef2 bag files). Asked Claude to look through the file line by line and describe its contents.
+- Asked Claude to look through the black_box bag file in more detail.
+ 
+Summary:
+topics.txt is 3,412 lines long and covers 54 ROS1 bag files from a single dive session on 2025-11-09 (starting ~04:24 AEST). The bags fall into two groups:
+- 53 x all-EddyReef2_* bags: 30-second rolling segments numbered _0 through _52, covering approximately 26 minutes of the dive. The final segment (_52) is very sparse — only surface GPS and rosout topics — suggesting the glider had surfaced or recording was winding down.
+- 1 x black_box-EddyReef2_2025-11-09-04-24-46.bag: a separate parallel recording covering the full session with the complete topic set; intended as the authoritative record.
+ 
+Topics identified across all bags:
+- Camera: /glider_1/camera_front/image_raw/compressed [sensor_msgs/msg/CompressedImage], camera_info
+- Depth: /glider_1/state/depth [std_msgs/msg/Float64], raw_depth, depth_velocity, effective_altitude, state/altitude
+- GPS: /surface/ublox_gps/fix [sensor_msgs/msg/NavSatFix], fix_velocity, navpvt, navposecef, navstatus, navsvinfo, navclock; also /glider_1/position/cable_setback [ublox_msgs/msg/NavPVT7]
+- Sonar: /glider_1/sensor/sonar_down/distance [glider/msg/SonarDistance], sonar_down/profile, sonar_down/configuration
+- IMU / orientation: /glider_1/sensor/imu [sensor_msgs/msg/Imu], mag, state/pitch, roll, yaw, track
+- Pressure / temperature: /glider_1/sensor/pressure [sensor_msgs/msg/FluidPressure], temperature/water, pressure/temperature/water
+- PID controllers: altitude, depth, depth_velocity, pitch, roll — each with /effort, /setpoint, /enable, /debug subtopics
+- Flight controllers: altitude_hold, depth_hold, depth_velocity, manual, stabilised — each with actionlib /goal, /status, /result, /cancel
+- Surface station: /surface/client_count, /surface/connected_clients (rosbridge)
+- ROS internals: /rosout, /rosout_agg, /tf_static, /diagnostics, /begin_write
+ 
+Key findings for process_dives.py topic constants:
+- CAMERA_TOPIC = '/glider_1/camera_front/image_raw/compressed'
+- DEPTH_TOPIC = '/glider_1/state/depth'
+- GPS_TOPIC = '/surface/ublox_gps/fix'
+- SONAR_TOPIC = '/glider_1/sensor/sonar_down/distance'
+
+-----------------------------------------
+Claude AI with MING XUAN @ 21/3/2026 — Azure Blob Storage access + metadata inspection
+-----------------------------------------
+ 
+Prompts:
+- Shared a screenshot of an email from FFT explaining how to access the Azure Blob Storage containing the EddyReef2 rosbag data
+- How would I load this data to see in Azure Storage Explorer
+- Uploaded metadata.yaml from the EddyReef2 dive session, asked what it was for
+ 
+Summary:
+Walked through the two azcopy commands provided by FFT — one for the full blob store, one scoped to the EddyReef2 rosbag directory. Explained that pasting the SAS URL directly into a browser does not work because the container holds multiple files; azcopy or Azure Storage Explorer must be used instead.
+ 
+For Azure Storage Explorer: connect via the plug icon → Blob Container → Shared Access Signature URL, paste the full SAS URL, and the uqdatashare container appears under Local & Attached. The rosbags/ folder is then browsable from there. Noted the SAS token expires 2026-08-04.
+ 
+Inspected metadata.yaml from the 2025-11-09-04-24-44+0000_EddyReef2 session:
+- cable_length_meters: 40 — 40m cable, indicating a deep dive
+- description: "Rest of Eddy reef and max depth test. 40m cable"
+- collaborator: left as placeholder "Select here..." — unfilled
+- location: empty — GPS must come from the ROS bag topics instead
+
+-----------------------------------------
+Claude AI with MING XUAN @ ~3pm 10/5/2026
+-----------------------------------------
+
+[Performance audit, inconsistency fixes, and query optimisation on annotator/views.py]
+
+Prompts:
+- Act as a professional data scientist, look through the files and check if there are any redundant SQL queries, API calls or things that are making the website slow
+- What would select_related be used for and why is it important to implement
+- Implement critical and medium level performance issues
+
+
+Summary:
+Performance audit across annotator/views.py, models.py, index.html, and workspace.html. Found and fixed N+1 query bugs (missing select_related on taxonomy_label FK), wasteful full-row saves (replaced box.save() with save(update_fields=[...]) on classify, specify, and PATCH endpoints), and a double-query in api_export (second .filter() replaced with Python-side filtering on an already-fetched list).
+
+Inconsistency audit found: missing @login_required on api_classify_box, api_classify_boxes, and api_specify_box (all three fixed); classify_many URL carrying a dead box_id path parameter (removed from urls.py, function signature updated); api_classify_boxes crashing with TypeError when Attached key was missing (added or [] default and 400 guard); frontend applyLabel() still calling the old boxes/<id>/classify_many/ URL after the backend route was changed (updated to classify_many/).
+
+Explained that the DINOv2 inference error on box click is by design — showClassifyPanel() fires api/suggest/ automatically for every box selected in the classify tab (autoAI=true by default). The 401 is caused by two issues: the model name in config.yaml is facebook/dinov3-vitb16-pretrain-lvd1689m (DINOv3 does not exist; HuggingFace resolves it to dinov2-vitb16-pretrain-lvd1689m), and that variant is a gated repo requiring HF_TOKEN. Recommended switching to the public facebook/dinov2-vitb16 model.
+
+Diagnosed slow bulk classification as 3N+1 queries (get_object_or_404 per box, TaxonomyLabel lookup repeated inside loop, one UPDATE per box). Replaced entire loop with a single queryset.update() call — 3 queries flat regardless of selection size.
+
+
+-----------------------------------------
+Claude AI with MING XUAN @ ~3pm 17/5/2026 — Frontend performance: skeleton loading, AJAX navigation, and UI fixes
+-----------------------------------------
+
+[Progressive loading improvements across the index page, annotation workspace, and review queue]
+
+Prompts:
+- Is there a way to make it look like it's loading faster by loading some page elements first before the things that actually need to be fetched?
+- Like lets say I press the specifying tab, I want the things in that tab to show up first even though there's no images on it. Do not make changes, just give me suggestions on how to fix
+- Number 2 sounds good (AJAX partial swap + instant skeleton on tab click), plan the implementation
+- What does AJAX do and can I just do this without it?
+- Keep the original plan with AJAX (reversed decision, proceeded with full AJAX partial swap)
+
+Summary:
+Index page — Added <link rel="preconnect"> hints for Google Fonts and Supabase CDN to reduce DNS/TCP overhead. Added shimmer skeleton CSS (@keyframes shimmer) on card thumbnails so images fade in progressively instead of popping in. Implemented full AJAX partial navigation: a new index_partial.html template renders only the five swappable sections (toolbar text, search row, category chips, image grid, pagination). The index view branches on ?partial=1 to return this fragment. JavaScript intercepts all pipeline tab, category chip, pagination, and search form interactions — shows 12 shimmer skeleton cards and updates the active tab highlight instantly, then fetches the partial and swaps sections via DOMParser + replaceWith(). history.pushState keeps the URL in sync and a popstate handler restores the correct state on browser back. No-JS fallback preserved (all links remain real <a> tags).
+
+Workspace tabs — Made the Bound / Classify / Specify tabs switch entirely client-side without a page reload. Refactored setupTabUI() into switchTab(tab) that accepts a parameter and updates panel visibility, toolbar visibility, tab active classes, and the submit button in one call. Replaced the single server-rendered "Send to X & Next" button (which was conditioned on both role and active_tab) with all role-appropriate variants rendered as hidden elements using data-for-tab attributes — switchTab() shows the correct one per active tab. A delegated click listener intercepts .tab link clicks, calls switchTab(), and pushes the new URL. popstate restores the tab on browser back. Canvas state, boxes, and image are fully preserved across tab switches since no reload occurs.
+
+Workspace loading states — Added a canvas shimmer overlay (#canvas-shimmer, position: absolute inset 0, z-index 1) that fills the canvas area with an animated sweep while the main image downloads from Supabase. The #main-image starts at opacity: 0 and transitions to opacity: 1 once loaded. initAfterLoad() removes the shimmer and fades in the image on the img load event, then injects 4 shimmer skeleton rows (.box-skeleton) into all three box list elements before calling loadBoxes(). When loadBoxes() resolves and renderBoxLists() runs, the real box items naturally replace the skeletons.
+
+##################################################
+END OF MING XUAN's AI USAGE
+##################################################
