@@ -76,9 +76,8 @@ class AnalysisImage(models.Model):
             return
         if not self.boxes.exists():
             return
-        unlabeled = self.boxes.filter(
-            ai_suggested_label="", taxonomy_label__isnull=True
-        ).exists()
+        unlabeled = self.boxes.filter(taxonomy_label__isnull=True).exists()
+        
         if not unlabeled:
             self.status = "complete"
             self.save(update_fields=["status"])
