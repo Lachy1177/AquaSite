@@ -505,7 +505,6 @@ def _persist_suggestion(box, result):
         changed = True
     if changed:
         box.save(update_fields=["ai_suggested_label", "ai_suggestion_confidence"])
-    box.image.mark_complete_if_done()
 
 
 @login_required

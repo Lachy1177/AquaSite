@@ -138,7 +138,6 @@ class Command(BaseCommand):
                         box.save(update_fields=[
                             "ai_suggested_label", "ai_suggestion_confidence",
                         ])
-                    boxes[0].image.mark_complete_if_done()
                 written += len(updates)
 
             self.stdout.write(
