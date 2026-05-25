@@ -1098,8 +1098,8 @@ function selectBox(id) {
   const b = boxes.find(x => x.id === id);
   if (!b) return;
   updatePropsPanel(b);
-  if (ACTIVE_TAB === "classify") showClassifyPanel(b);
-  if (ACTIVE_TAB === "specify")  showSpecifyPanel(b);
+  if (currentTab === "classify") showClassifyPanel(b);
+  if (currentTab === "specify")  showSpecifyPanel(b);
   highlightListItem(selectedBoxes)
 }
 
