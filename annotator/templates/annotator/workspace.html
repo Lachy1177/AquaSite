@@ -1485,14 +1485,16 @@ async function showClassifyPanel(b) {
     refreshTaxHighlight(b);
     return;
   }
- if (b.ai_suggested_label) {
-  renderSuggestionCard(b, { label: b.ai_suggested_label, confidence: b.ai_suggestion_confidence, top_k: b._top_k });
-} else {
-  card.innerHTML = `<div class="ai-card"><div class="ai-card-header">
-    <svg width="10" height="10" viewBox="0 0 16 16" fill="var(--accent)"><circle cx="8" cy="8" r="6"/></svg>
-    Running DINOv3 on this box…
-  </div></div>`;
-}
+  if (b._top_k && b._top_k.length) {
+    renderSuggestionCard(b, { label: b.ai_suggested_label, confidence: b.ai_suggestion_confidence, top_k: b._top_k });
+  } else {
+    card.innerHTML = `<div class="ai-card">
+      <div class="ai-card-header">
+        <svg width="10" height="10" viewBox="0 0 16 16" fill="var(--accent)"><circle cx="8" cy="8" r="6"/></svg>
+        Running DINOv3 on this box…
+      </div></div>
+      <button class="dino-btn w100" disabled style="margin-top:6px">Suggest</button>`;
+  }
   refreshTaxHighlight(b);
   try {
     const res = await api(`boxes/${b.id}/suggest/`, "POST");
@@ -1513,10 +1515,6 @@ async function showClassifyPanel(b) {
 function renderSuggestionCard(b, res) {
   const card = document.getElementById("ai-suggestion-card");
   if (!card || !res || !res.top_k) return;
-  const topK = res.top_k || (res.label ? [{ label: res.label, confidence: res.confidence || 0 }] : []);
-  if (!topK.length) {
-    card.innerHTML = `<div style="color:var(--text-dim);font-size:10px">No suggestion available</div>`;
-    return;
   const rows = res.top_k.map((t, i) => {
     const pct = Math.round(t.confidence * 100);
     const isTop = i === 0;
