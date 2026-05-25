@@ -449,6 +449,371 @@ Resize — Was clearing resizeBoxSnapshot before using it to look up the box in 
 
 All three — Replaced the cached imgDispW/H with getFreshDims() which reads offsetWidth/Height live from the element each time. If the window was resized since page load, the stale cache would give wrong coordinates.
 
------------------------------
 
 -----------------------------
+Here's a summary of what was built and decided in this conversation:
+What was built
+A Django app called annotator — a Photoshop-style marine image annotation tool with three workflow tabs: Bound, Classify, and Specify.
+Key design decisions
+Architecture
+
+Self-contained Django app that drops into any existing project
+SQLite for local dev, Supabase PostgreSQL for production, controlled by .env
+Bounding boxes stored as percentages (0–100) of image dimensions, so they're resolution-independent
+Soft-delete on boxes rather than hard delete, so mistakes are recoverable
+
+Bounding tab
+
+DINOv3 detection stubbed out — generates random boxes for UI development, with the real endpoint implementation written but commented out ready to swap in
+Draw, select, and erase tools with keyboard shortcuts (V/D/E)
+Boxes draggable and resizable with corner handles
+
+Classify tab
+
+AI suggestion via Claude API stubbed the same way as DINO — real implementation written and commented out
+Taxonomy labels loaded from database (controlled vocabulary), seeded with common marine species across fish, coral, invertebrate, algae, other categories
+Both AI suggestion and manual taxonomy picker work together
+
+Specify tab
+
+Boxes routed by category — coral boxes go to coral researchers, fish boxes to fish researchers etc.
+Free-text species name and researcher notes fields
+Finalise toggle to lock a box as complete
+
+Export
+
+Single JSON endpoint that returns all boxes plus a by_category dict grouping finalised boxes by type — the hook for downstream ML pipelines and researcher routing
+
+Setup issues resolved
+
+Windows Store Python 3.7 conflicting with venv Python 3.11 — fixed by always using .\venv\Scripts\python.exe explicitly
+Pillow not found despite being installed — caused by same Python version mismatch
+Templates in wrong folder — moved to annotator/templates/annotator/
+Supabase connection — wrong region (ap-southeast-2 → ap-northeast-1) and wrong port (6543 → 5432)
+Taxonomy not showing in classify tab — labels needed to be re-seeded after switching from SQLite to Supabase
+-----------------------------
+Shared the DB schema and migration file, asked how to add the migration and create an account
+Shared server logs, said the server was really slow and wouldn't let them log in
+Shared views.py and admin.py code (no question, just context)
+Shared models.py code (no question, just context)
+Shared shell output with a traceback from typing your_superuser_username literally
+Shared logs showing login POST 302, said "It wont log me in"
+Shared settings.py, no message
+Shared annotator/urls.py, no message
+Shared AquaSightWeb/urls.py, no message
+Got TemplateDoesNotExist error for annotator/login.html
+Got Internal Server Error traceback, then "no"
+Said "no more logs, same url, it just seems like its loading"
+Shared a browser network tab screenshot
+Shared tests.py, asked to fix them to work with an account
+Shared the README draft, asked to format it for GitHub MD and add account creation/modification docs
+----------------------------
+[uploaded files — README]
+[uploaded files — all source files]
+[uploaded cluster_summary.json] "I want to properly implement the "upload" feature. it should have a file select to upload a Json, which will look similar to this file. It will also have a video file selector, however this is for video files on the supabase DB not for a local file. it should take the representation image frames from the video file and use that. please make it so that in future there is a little "next image" button for each of the tabs, as they are kind of meant to be used in a long session, not switching between one another. essentially one person will sit there and bound the images, Ideally adding it to a queue on the DB and then another will classify ect. this bit doesn't need to be implemented yet, but keep it in mind."
+[error log] (no message, just the traceback)
+[error log] (no message, just the traceback)
+[error log] (no message, just the traceback)
+"ProgrammingError at /annotator/ ..."
+[migration error] (no message)
+"ProgrammingError at /annotator/ ..."
+"is it because it is trying to connect to supabase?"
+[shell traceback] (no message)
+"ok working now, they are actual videos, not just a collection of images btw..."
+"real quick, how do i make the default "dive-videos""
+"my friend says we can just do photos!"
+"explain it to me?"
+--------------------------
+(Pasted error output about hf-cli and uvx not being recognized)
+(Pasted error output about huggingface-cli being deprecated and hf login failing)
+"Add token as git credential? [y/N]:"
+"give me all my prompts in this session"
+--------------------------
+Fix clustering UI and introduce 3-stage pipeline (bound → classify → specify) with queue system and "next image" button
+Fix pipeline counts bug at top of index page (showing wrong totals)
+Speed up page load by not loading all thumbnails
+Setup steps to put this on AWS
+Explain Step 2 (DNS) for VentraIP
+GitHub repo is https://github.com/Lachy1177/AquaSite
+Getting "repo not found" error on git clone
+manage.py is at /home/ubuntu/app/manage.py
+Getting OSError no space left on device
+/dev/xvda does not exist (wrong device name)
+What else do I need to do (continuing setup)
+Migration error — cluster_id column already exists
+What do I paste in the service file
+Gunicorn 203/EXEC error
+Certbot failed — domain not pointing to EC2 yet
+Getting 502 Bad Gateway
+Permission denied on socket fix
+What to do on a git update
+Can GitHub run the deploy automatically
+Certbot — www not in server_name
+What is my SSH command with pem file
+How to log into Hugging Face
+Still not working despite being logged in
+How to restart the website
+Inference failed — gated repo error
+Token variable name mismatch (HUGGING_FACE_TOKEN vs HUGGINGFACE_TOKEN)
+Same error after fix
+Model downloads successfully with token hardcoded
+Says no trained classifier found
+How to send classifier_best.pt from local machine to server
+------------------------
+Why won't this urls.py go to index.html? Getting "Not Found" at base URL
+Shared project-level urls.py
+I want to go to index.html
+I want just index on the base URL, rest on /annotator/
+Shared updated urls.py with views.landing
+Shared full views.py
+It works locally but not on production
+AWS with nginx and gunicorn
+I ran ./deploy.sh, what should I do now?
+Looks like git pull didn't pull the HTML?
+Shared git log — seems one behind, is that normal?
+Shared git stash pop conflict in settings.py
+Shared the conflict: LOGOUT_REDIRECT_URL = "/" vs "/login/"
+Ok now deploy?
+Make this login.html look better (shared bare login + landing for context)
+Git pull failing due to unmerged files, can I stop it checking settings?
+Got "divergent branches" error on git pull
+Give me all my prompts condensed here
+----------------------
+Here are all your messages from this conversation:
+
+A list of GitHub commits from Apr 13 – May 11, 2026, asking for a short changelog page documenting changes from the past 4 weeks, noting you could provide more info on vague commits.
+An upload of AquaSite-main.zip, asking for a markdown file that incorporates a set of headline changes (the 3-phase pipeline, optimisations by Connor/MingXuan/Jack, homepage by Mohammad, login page by Jack, and the AWS/aquasight.au deployment), plus a file structure overview.
+"give me all my prompts condensed here"
+----------------------
+"The server isn't seeming to be running properly, I can't access the website"
+[pasted ps aux and ss output]
+[pasted nginx status, error logs, socket, journalctl, nginx config]
+"It's still not working..."
+[pasted error log]
+"This site can't be reached / aquasight.au unexpectedly closed the connection. ERR_CONNECTION_CLOSED"
+[pasted curl -I http://localhost output]
+[pasted curl -Ik https://aquasight.au output — 200 OK]
+"This is strange cuz we havent made a change since last night when it worked"
+[pasted curl ifconfig.me and nslookup output]
+"Seems UQ's network is blocking it, is there a workaround?"
+"give me all my prompts condensed here"
+"give me my exact messages and a summary"
+
+
+Summary:
+You couldn't access your Django/nginx server after a deploy. The deploy script had a git pull failure but continued. Gunicorn and nginx were both running fine. The real issue was nginx couldn't read static files due to file permissions, which was fixed with chmod. The site was actually working the whole time — the problem was UQ's university network blocking the connection.
+------------------------
+
+##################################################
+END OF Jack's AI USAGE
+
+
+##################################################
+LACHLAN'S AI USAGE
+##################################################
+
+-----------------------------------------
+Claude AI with Lachlan 31/3/26 data pipeline
+-----------------------------------------
+
+
+Prompts:
+- Explain the current workflow breakdown of the djanjo and supabase structure
+- How do i Pull raw MP4 dive clips out of the Supabase 'dive-videos' bucket; extract frames at a fixed FPS
+- Build a bulk_import management command that walks the staged frames, uploads to Supabase storage, and writes AnalysisImage rows with cluster_id from the clustering pass
+- Due to DinoV3 working with embeddings is it best to filter the dino by k means clustering. If so give any supporting evidence on the embeddings
+- How should i structure the ML pipeline with the already given annotator code.
+
+Summary:
+Built scripts/extract_frames.py + scripts/extract_bags.py for raw ingestion, Wired Supabase storage as the authoritative image store. The bulk_import command walks the staged folder, uploads to storage, and writes AnalysisImage rows tagged with the cluster_id
+
+
+-----------------------------------------
+Claude AI with Lachlan @ mid 10/4/26— DINOv3 frozen backbone + bridge to Django
+-----------------------------------------
+
+[Wrap DINOv3 ViT-B/16 as a frozen feature extractor, cache it at module level, expose inference functions that Django views can call cheaply]
+
+Prompts:
+- I Have dinov3 backbone model from huggingface how can i attached it to my web structure. Have a look at my current directory and explain to me how
+- HuggingFace transformers AutoModel pulls facebook/dinov3-vitb16-pretrain-lvd1689m
+- It's a gated model — HF_TOKEN required on first fetch
+- The CLS token is 768-d; that's the embedding we want
+- Build a bridge module so Django views don't reload the ViT per request — module-level cache
+- Need three entry points: whole-image classify, single-box crop classify, batched many-box classify
+- _crop_by_pct helper: percentage-coordinate BoundingBox → PIL.Image crop, matching how the dataset loader crops at training time
+- Also expose get_embedding() for the workspace's similarity-search feature
+
+Summary:
+Built ml/models/backbone.py with DINOv3Backbone (HF AutoModel under the hood, all parameters frozen, eval mode, CLS-token extract by default). Built ml/bridge.py with _ensure_models_loaded() that caches backbone + classifier + class_names at module level — first request to any endpoint pays the ~327 MB load cost; subsequent requests reuse the in-memory copies. Exposed run_dino_inference, run_dino_inference_on_crop, run_dino_inference_on_crops, and get_embedding. Django endpoints (api_suggest_box, api_suggest_all, api_classify_box) call these.
+
+-----------------------------------------
+Claude AI with Lachlan  10/5/26 MLP classifier head + class weighting + HITL review queue
+-----------------------------------------
+
+[Train a small classifier on top of frozen DINOv3 features; fix class imbalance and unreproducible splits; build a stratified human-in-the-loop review queue]
+
+Prompts:
+- Backbone is frozen — train a small head on the 768-d CLS embedding to classify box crops
+- Two heads: LinearClassifier (LayerNorm → Linear) and MLPClassifier (LayerNorm → Linear → GELU → Dropout → Linear). build_classifier factory picks based on config.classifier.type
+- Training data: per-box crops (sample_mode="box"), min_box_fraction=0.005 to drop tiny boxes
+- 70/15/15 stratified split inside each class so train/val/test all see proportional class representation
+- Tag checkpoint filenames with classifier type — classifier_{type}_best.pt and classifier_{type}_epoch_NNN.pt. Also keep classifier_best.pt as the canonical alias that the bridge reads
+- HITL review queue — which boxes should the human actually look at?
+  - Stratified queue: 70% lowest-confidence (uncertain), 20% rare-class (under-represented in training), 10% highest-confidence (catches silent over-confidence)
+  - _rare_class_names(): bottom-quartile classes by current box count
+  - is_ai_reviewed BooleanField + migration 0006 — queue-exclusion flag so a confirmed box never gets queued twice
+- populate_ai_suggestions management command — bulk-write ai_suggested_label across every unclassified box so the queue has something to draw on
+- /annotator/review/ page: split layout (full frame left, zoomed crop right, 15% context padding), keyboard shortcuts Y/N/W/1-9/Esc/R for fast review
+
+Summary:
+Built ml/models/classifier.py (LinearClassifier + MLPClassifier + build_classifier + load_checkpoint), ml/training/train.py 
+(per-epoch JSONL logging + val-split early stopping on macro-F1 + class-weighted CE), ml/data/dataset.py 
+(AquaSiteImageDataset + AquaSiteBoxDataset, 
+ml/run.py with cmd_train / cmd_eval / cmd_embed / cmd_cluster subcommands. 
+Best honest val macro-F1: MLP 0.6624 @ epoch 14, Linear 0.6232 @ epoch 13 on a 54-sample val split
+
+
+-----------------------------------------
+Claude AI with Lachlan @ 15/5/26 auto-box tiler + review-queue completeness gating + production deployment debug
+-----------------------------------------
+Prompts: - 
+
+- Review queue should only draw from "complete" images. AI-classifying a frame is complete enough since we just need training data
+- Status doesn't auto-advance on AI suggestion right now — add a mark_complete_if_done() method on AnalysisImage that promotes when every box has either a taxonomy_label or a non-empty ai_suggested_label. Call from _persist_suggestion (UI flow) and populate_ai_suggestions (bulk)
+- My idea is 32x32 sliding window with classification per tile
+  (talked out of that — DINOv3 needs whole-image context; 32×32 on a 1920×1080 frame would be ~2000 forward passes. Better options: DINOv3 patch-foreground (cheap), FastSAM (best but +140 MB dep), or uniform tiling.)
+- Bump to 8×8 = 64 tiles for finer coverage
+- Why don't the AI labels show on the boxes? (Workspace overlay was rendering "DINO XX%" — the source field + confidence — instead of the actual ai_suggested_label. Fixed at workspace.html:972 to fall through to ai_suggested_label when no human confirmation yet.)
+- Colour boxes by AI category before human confirmation, like classify tab does. (Added categoryFor() helper that resolves taxonomy_category first, then looks up ai_suggested_label in TAXONOMY. Dashed border = AI-suggested, solid = human-confirmed.)
+- Production: "Auto-box failed: SyntaxError: The string did not match the expected pattern." Other browser: "Unexpected token '<', '<html>...' is not valid JSON"
+  (Server returning HTML instead of JSON. JSON.parse fails on the leading '<' of the HTML error page.)
+- Wrap api_auto_box body in an outer try/except so unexpected server-side errors return JSON instead of bubbling to Django's default HTML 500 page
+- Deployed the fix — same error, no change in toast text
+  (Either the deploy didn't restart gunicorn, OR the failure happens before any view code runs.)
+-:Pulled DevTools network tab: status 500, 30.22 seconds, generic "Internal Server Error" HTML body
+  (Smoking gun: 30.22s is exactly gunicorn's default worker timeout. The worker was being SIGKILL'd mid-request — that's an OS signal, not a Python exception, so my outer try/except can't catch it. The endpoint was loading DINOv3 (~327 MB) and running 64 classifications on a CPU-only EC2, which exceeded the timeout.)
+
+- Drop all ML inference from api_auto_box. Just create empty tiles via propose_boxes (pure NumPy/Python, no torch). Cut the grid to 4×4 = 16 tiles. Classification happens separately when the user clicks "classify all unclassified" on the classify tab (which only has 16 boxes to do per image — well under the timeout once DINOv3 is cached in the worker).
+
+Summary:
+Assited in ml/auto_box.py — a uniform NxN tiler that returns full-frame coverage as percent bounding boxes. 
+Wired into a new api_auto_box endpoint behind a "✨ Auto-box this image" button in the workspace bound-stage toolbar. 
+Endpoint skips if the image already has any boxes (manual boxing wins). Added AnalysisImage.mark_complete_if_done() that auto-promotes status to "complete" once every box on the image has a taxonomy_label or non-empty ai_suggested_label.
+
+##################################################
+END OF Lachlan's AI USAGE
+##################################################
+
+##################################################
+MING XUAN'S AI USAGE
+##################################################
+
+-----------------------------------------
+Claude AI with MING XUAN @ 30/3/2026
+-----------------------------------------
+ 
+[Analysing ROS1 bag topic listings from EddyReef2 underwater glider survey data]
+ 
+Prompts:
+- Uploaded topics.txt (output of rosbag info / rosbags-info across all EddyReef2 bag files). Asked Claude to look through the file line by line and describe its contents.
+- Asked Claude to look through the black_box bag file in more detail.
+ 
+Summary:
+topics.txt is 3,412 lines long and covers 54 ROS1 bag files from a single dive session on 2025-11-09 (starting ~04:24 AEST). The bags fall into two groups:
+- 53 x all-EddyReef2_* bags: 30-second rolling segments numbered _0 through _52, covering approximately 26 minutes of the dive. The final segment (_52) is very sparse — only surface GPS and rosout topics — suggesting the glider had surfaced or recording was winding down.
+- 1 x black_box-EddyReef2_2025-11-09-04-24-46.bag: a separate parallel recording covering the full session with the complete topic set; intended as the authoritative record.
+ 
+Topics identified across all bags:
+- Camera: /glider_1/camera_front/image_raw/compressed [sensor_msgs/msg/CompressedImage], camera_info
+- Depth: /glider_1/state/depth [std_msgs/msg/Float64], raw_depth, depth_velocity, effective_altitude, state/altitude
+- GPS: /surface/ublox_gps/fix [sensor_msgs/msg/NavSatFix], fix_velocity, navpvt, navposecef, navstatus, navsvinfo, navclock; also /glider_1/position/cable_setback [ublox_msgs/msg/NavPVT7]
+- Sonar: /glider_1/sensor/sonar_down/distance [glider/msg/SonarDistance], sonar_down/profile, sonar_down/configuration
+- IMU / orientation: /glider_1/sensor/imu [sensor_msgs/msg/Imu], mag, state/pitch, roll, yaw, track
+- Pressure / temperature: /glider_1/sensor/pressure [sensor_msgs/msg/FluidPressure], temperature/water, pressure/temperature/water
+- PID controllers: altitude, depth, depth_velocity, pitch, roll — each with /effort, /setpoint, /enable, /debug subtopics
+- Flight controllers: altitude_hold, depth_hold, depth_velocity, manual, stabilised — each with actionlib /goal, /status, /result, /cancel
+- Surface station: /surface/client_count, /surface/connected_clients (rosbridge)
+- ROS internals: /rosout, /rosout_agg, /tf_static, /diagnostics, /begin_write
+ 
+Key findings for process_dives.py topic constants:
+- CAMERA_TOPIC = '/glider_1/camera_front/image_raw/compressed'
+- DEPTH_TOPIC = '/glider_1/state/depth'
+- GPS_TOPIC = '/surface/ublox_gps/fix'
+- SONAR_TOPIC = '/glider_1/sensor/sonar_down/distance'
+
+-----------------------------------------
+Claude AI with MING XUAN @ 21/3/2026 — Azure Blob Storage access + metadata inspection
+-----------------------------------------
+ 
+Prompts:
+- Shared a screenshot of an email from FFT explaining how to access the Azure Blob Storage containing the EddyReef2 rosbag data
+- How would I load this data to see in Azure Storage Explorer
+- Uploaded metadata.yaml from the EddyReef2 dive session, asked what it was for
+ 
+Summary:
+Walked through the two azcopy commands provided by FFT — one for the full blob store, one scoped to the EddyReef2 rosbag directory. Explained that pasting the SAS URL directly into a browser does not work because the container holds multiple files; azcopy or Azure Storage Explorer must be used instead.
+ 
+For Azure Storage Explorer: connect via the plug icon → Blob Container → Shared Access Signature URL, paste the full SAS URL, and the uqdatashare container appears under Local & Attached. The rosbags/ folder is then browsable from there. Noted the SAS token expires 2026-08-04.
+ 
+Inspected metadata.yaml from the 2025-11-09-04-24-44+0000_EddyReef2 session:
+- cable_length_meters: 40 — 40m cable, indicating a deep dive
+- description: "Rest of Eddy reef and max depth test. 40m cable"
+- collaborator: left as placeholder "Select here..." — unfilled
+- location: empty — GPS must come from the ROS bag topics instead
+
+-----------------------------------------
+Claude AI with MING XUAN @ ~3pm 10/5/2026
+-----------------------------------------
+
+[Performance audit, inconsistency fixes, and query optimisation on annotator/views.py]
+
+Prompts:
+- Act as a professional data scientist, look through the files and check if there are any redundant SQL queries, API calls or things that are making the website slow
+- What would select_related be used for and why is it important to implement
+- Implement critical and medium level performance issues
+
+
+Summary:
+Performance audit across annotator/views.py, models.py, index.html, and workspace.html. Found and fixed N+1 query bugs (missing select_related on taxonomy_label FK), wasteful full-row saves (replaced box.save() with save(update_fields=[...]) on classify, specify, and PATCH endpoints), and a double-query in api_export (second .filter() replaced with Python-side filtering on an already-fetched list).
+
+Inconsistency audit found: missing @login_required on api_classify_box, api_classify_boxes, and api_specify_box (all three fixed); classify_many URL carrying a dead box_id path parameter (removed from urls.py, function signature updated); api_classify_boxes crashing with TypeError when Attached key was missing (added or [] default and 400 guard); frontend applyLabel() still calling the old boxes/<id>/classify_many/ URL after the backend route was changed (updated to classify_many/).
+
+Explained that the DINOv2 inference error on box click is by design — showClassifyPanel() fires api/suggest/ automatically for every box selected in the classify tab (autoAI=true by default). The 401 is caused by two issues: the model name in config.yaml is facebook/dinov3-vitb16-pretrain-lvd1689m (DINOv3 does not exist; HuggingFace resolves it to dinov2-vitb16-pretrain-lvd1689m), and that variant is a gated repo requiring HF_TOKEN. Recommended switching to the public facebook/dinov2-vitb16 model.
+
+Diagnosed slow bulk classification as 3N+1 queries (get_object_or_404 per box, TaxonomyLabel lookup repeated inside loop, one UPDATE per box). Replaced entire loop with a single queryset.update() call — 3 queries flat regardless of selection size.
+
+
+-----------------------------------------
+Claude AI with MING XUAN @ ~3pm 17/5/2026 — Frontend performance: skeleton loading, AJAX navigation, and UI fixes
+-----------------------------------------
+
+[Progressive loading improvements across the index page, annotation workspace, and review queue]
+
+Prompts:
+- Is there a way to make it look like it's loading faster by loading some page elements first before the things that actually need to be fetched?
+- Like lets say I press the specifying tab, I want the things in that tab to show up first even though there's no images on it. Do not make changes, just give me suggestions on how to fix
+- Number 2 sounds good (AJAX partial swap + instant skeleton on tab click), plan the implementation
+- What does AJAX do and can I just do this without it?
+- Keep the original plan with AJAX (reversed decision, proceeded with full AJAX partial swap)
+
+Summary:
+Index page — Added <link rel="preconnect"> hints for Google Fonts and Supabase CDN to reduce DNS/TCP overhead. Added shimmer skeleton CSS (@keyframes shimmer) on card thumbnails so images fade in progressively instead of popping in. Implemented full AJAX partial navigation: a new index_partial.html template renders only the five swappable sections (toolbar text, search row, category chips, image grid, pagination). The index view branches on ?partial=1 to return this fragment. JavaScript intercepts all pipeline tab, category chip, pagination, and search form interactions — shows 12 shimmer skeleton cards and updates the active tab highlight instantly, then fetches the partial and swaps sections via DOMParser + replaceWith(). history.pushState keeps the URL in sync and a popstate handler restores the correct state on browser back. No-JS fallback preserved (all links remain real <a> tags).
+
+Workspace tabs — Made the Bound / Classify / Specify tabs switch entirely client-side without a page reload. Refactored setupTabUI() into switchTab(tab) that accepts a parameter and updates panel visibility, toolbar visibility, tab active classes, and the submit button in one call. Replaced the single server-rendered "Send to X & Next" button (which was conditioned on both role and active_tab) with all role-appropriate variants rendered as hidden elements using data-for-tab attributes — switchTab() shows the correct one per active tab. A delegated click listener intercepts .tab link clicks, calls switchTab(), and pushes the new URL. popstate restores the tab on browser back. Canvas state, boxes, and image are fully preserved across tab switches since no reload occurs.
+
+Workspace loading states — Added a canvas shimmer overlay (#canvas-shimmer, position: absolute inset 0, z-index 1) that fills the canvas area with an animated sweep while the main image downloads from Supabase. The #main-image starts at opacity: 0 and transitions to opacity: 1 once loaded. initAfterLoad() removes the shimmer and fades in the image on the img load event, then injects 4 shimmer skeleton rows (.box-skeleton) into all three box list elements before calling loadBoxes(). When loadBoxes() resolves and renderBoxLists() runs, the real box items naturally replace the skeletons.
+
+##################################################
+END OF MING XUAN's AI USAGE
+##################################################
+
+##################################################
+CONNOR HAY's AI USAGE
+##################################################
+
+Null.
+
+##################################################
+END OF CONNOR HAY's AI USAGE
+##################################################

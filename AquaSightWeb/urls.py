@@ -3,10 +3,14 @@ from django.urls import path, include
 from django.conf import settings
 from django.conf.urls.static import static
 from django.contrib.auth import views as auth_views
+from annotator import views
 
 urlpatterns = [
+
+    path("", views.landing, name="landing"),
     path('admin/', admin.site.urls),
     path("login/", auth_views.LoginView.as_view(template_name="annotator/login.html"), name="login"),
     path("logout/", auth_views.LogoutView.as_view(), name="logout"),
+    path("signup/", views.signup, name="signup"),
     path('annotator/', include('annotator.urls')),
 ] + static(settings.MEDIA_URL, document_root=settings.MEDIA_ROOT)

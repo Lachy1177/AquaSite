@@ -32,6 +32,12 @@ training:
   sample_mode: "box"
   min_box_fraction: 0.005  # box mode: skip boxes below 0.5% of image area
 
+  # Stratified train / val / test split. Fractions apply *inside each class*
+  # (so every class is represented in roughly the same ratio across all 3 sets).
+  # train_frac is implicit: 1.0 - val_frac - test_frac (here: 0.70).
+  val_frac: 0.15
+  test_frac: 0.15
+
 embedding:
   output_dir: "./ml/outputs/embeddings"
   batch_size: 64
@@ -42,3 +48,11 @@ classifier:
   type: "mlp"
   hidden_dims: [512, 256]
   dropout: 0.3
+
+auto_box:
+  # Uniform NxN tiler. Every image gets full-frame coverage of grid*grid
+  # tiles, each classified independently. Trade granularity for review
+  # cost: 4=16, 5=25, 6=36, 8=64, 10=100.
+  grid: 8
+  padding: 0.0
+  max_boxes: 100

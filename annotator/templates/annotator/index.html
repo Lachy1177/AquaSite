@@ -4,6 +4,10 @@
 <head>
 <meta charset="UTF-8">
 <title>AS · Marine Image Analysis</title>
+<link rel="icon" type="image/svg+xml" href="{% static 'annotator/favicon.svg' %}">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="preconnect" href="https://ymwuxnzqfexkbklbzzph.supabase.co" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@300;400;500&family=Syne:wght@400;700;800&display=swap" rel="stylesheet">
 <style>
   /* ─── TOKENS ──────────────────────────────────────────────────── */
@@ -275,6 +279,113 @@
   .chip:hover { border-color: var(--border-hi); color: var(--text); }
   .chip.active { background: var(--accent-dim); border-color: var(--accent); color: var(--accent); }
 
+  /* Cluster search */
+  .cluster-search-form {
+    margin-left: auto;
+    display: flex;
+    align-items: center;
+    gap: 4px;
+  }
+  .cluster-input {
+    width: 52px;
+    background: var(--bg-panel);
+    border: 1px solid var(--border);
+    border-radius: 2px;
+    color: var(--text);
+    font-family: var(--mono);
+    font-size: 10px;
+    padding: 4px 8px;
+    text-align: center;
+    -moz-appearance: textfield;
+  }
+  .cluster-input::-webkit-outer-spin-button,
+  .cluster-input::-webkit-inner-spin-button { -webkit-appearance: none; margin: 0; }
+  .cluster-input:focus { outline: none; border-color: var(--accent); }
+  .cluster-total {
+    font-family: var(--mono);
+    font-size: 10px;
+    color: var(--text-dim);
+  }
+  .cluster-clear {
+    font-size: 12px;
+    color: var(--text-dim);
+    text-decoration: none;
+    padding: 0 4px;
+    line-height: 1;
+  }
+  .cluster-clear:hover { color: var(--text); }
+
+  /* ─── SEMANTIC SEARCH ────────────────────────────────────────── */
+  .search-row {
+    padding: 10px 28px;
+    border-bottom: 1px solid var(--border);
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+  }
+  .search-form {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+  .search-input-wrap {
+    position: relative;
+    flex: 1;
+    display: flex;
+    align-items: center;
+  }
+  .search-icon {
+    position: absolute;
+    left: 9px;
+    font-size: 14px;
+    color: var(--text-dim);
+    pointer-events: none;
+    line-height: 1;
+  }
+  .search-input {
+    width: 100%;
+    background: var(--bg-mid);
+    border: 1px solid var(--border);
+    border-radius: 2px;
+    color: var(--text);
+    font-family: var(--mono);
+    font-size: 11px;
+    padding: 6px 28px 6px 26px;
+    outline: none;
+    transition: border-color .15s;
+  }
+  .search-input:focus { border-color: var(--accent); }
+  .search-input::placeholder { color: var(--text-dim); }
+  .search-clear {
+    position: absolute;
+    right: 8px;
+    font-size: 14px;
+    color: var(--text-dim);
+    text-decoration: none;
+    line-height: 1;
+  }
+  .search-clear:hover { color: var(--text); }
+  .search-btn {
+    background: var(--accent);
+    color: #000;
+    font-family: var(--sans);
+    font-weight: 700;
+    font-size: 11px;
+    border: none;
+    border-radius: 2px;
+    padding: 6px 14px;
+    cursor: pointer;
+    white-space: nowrap;
+    transition: opacity .15s;
+  }
+  .search-btn:hover { opacity: .85; }
+  .search-banner {
+    font-size: 10px;
+    color: var(--text-muted);
+    letter-spacing: .3px;
+  }
+  .search-banner .search-term { color: var(--accent); }
+
   /* ─── IMAGE GRID ─────────────────────────────────────────────── */
   .image-grid {
     padding: 16px 28px 40px;
@@ -297,12 +408,25 @@
     border-color: var(--accent);
     transform: translateY(-1px);
   }
+  @keyframes shimmer {
+    0%   { background-position: -400px 0; }
+    100% { background-position:  400px 0; }
+  }
   .card-thumb {
     width: 100%;
     height: 130px;
     object-fit: cover;
     display: block;
+    background: linear-gradient(90deg, #1a1a1a 25%, #2a2a2a 50%, #1a1a1a 75%);
+    background-size: 800px 100%;
+    animation: shimmer 1.4s infinite linear;
+    opacity: 0;
+    transition: opacity 0.3s ease;
+  }
+  .card-thumb.loaded {
+    animation: none;
     background: #111;
+    opacity: 1;
   }
   .card-body { padding: 9px 11px 10px; }
   .card-name {
@@ -392,24 +516,22 @@
   <a class="logo" href="{% url 'annotator:index' %}"><span class="a">A</span><span class="s">S</span></a>
   <span class="header-sub">Marine Image Annotator · Aquatic Sciences</span>
 
-  {% if role == "admin" or role == "annotator" %}
-  <button class="header-btn" id="import-btn" onclick="importFromSupabase(event)">
-    ↓ Import Supabase
-  </button>
+  {% if role == "classifier" or role == "researcher" or role == "admin" %}
+  <a class="header-btn" href="{% url 'annotator:review' %}">⚡ Review queue</a>
   {% endif %}
 
   {% if role == "admin" %}
-  <a class="header-btn" href="{% url 'annotator:admin_dashboard' %}">Admin ↗</a>
+  <a class="header-btn" href="/admin/">Admin</a>
   {% endif %}
 
   <a class="header-btn" href="{% url 'logout' %}">Sign out</a>
 </div>
 
 <!-- ── PIPELINE STRIP ───────────────────────────────────────────────── -->
-<div class="pipeline-strip">
+<div id="pipeline-strip" class="pipeline-strip">
 
   <a class="pipeline-stage stage-bound {% if active_status == 'bound' %}active{% endif %}"
-     href="?status=bound{% if active_cluster %}&cluster={{ active_cluster }}{% endif %}">
+     href="?status=bound{% if active_cluster %}&cluster={{ active_cluster }}{% endif %}{% if active_dive %}&dive={{ active_dive }}{% endif %}">
     <div class="stage-icon">⬡</div>
     <div class="stage-info">
       <div class="stage-label">Bounding</div>
@@ -418,7 +540,7 @@
   </a>
 
   <a class="pipeline-stage stage-classify {% if active_status == 'classify' %}active{% endif %}"
-     href="?status=classify{% if active_cluster %}&cluster={{ active_cluster }}{% endif %}">
+     href="?status=classify{% if active_cluster %}&cluster={{ active_cluster }}{% endif %}{% if active_dive %}&dive={{ active_dive }}{% endif %}">
     <div class="stage-icon">◈</div>
     <div class="stage-info">
       <div class="stage-label">Classifying</div>
@@ -427,7 +549,7 @@
   </a>
 
   <a class="pipeline-stage stage-specify {% if active_status == 'specify' %}active{% endif %}"
-     href="?status=specify{% if active_cluster %}&cluster={{ active_cluster }}{% endif %}">
+     href="?status=specify{% if active_cluster %}&cluster={{ active_cluster }}{% endif %}{% if active_dive %}&dive={{ active_dive }}{% endif %}">
     <div class="stage-icon">◎</div>
     <div class="stage-info">
       <div class="stage-label">Specifying</div>
@@ -436,7 +558,7 @@
   </a>
 
   <a class="pipeline-stage stage-complete {% if active_status == 'complete' %}active{% endif %}"
-     href="?status=complete{% if active_cluster %}&cluster={{ active_cluster }}{% endif %}">
+     href="?status=complete{% if active_cluster %}&cluster={{ active_cluster }}{% endif %}{% if active_dive %}&dive={{ active_dive }}{% endif %}">
     <div class="stage-icon">✓</div>
     <div class="stage-info">
       <div class="stage-label">Complete</div>
@@ -446,7 +568,7 @@
 
   <!-- "All" clears status filter -->
   <a class="pipeline-stage {% if not active_status %}active{% endif %}"
-     href="?{% if active_cluster %}cluster={{ active_cluster }}{% endif %}"
+     href="?"
      style="margin-left: auto; --stage-color: var(--text-muted);">
     <div class="stage-info">
       <div class="stage-label" style="color: var(--text-muted)">All</div>
@@ -493,16 +615,18 @@
 
 <!-- ── UPLOAD + CLUSTER TOOLBAR ────────────────────────────────────── -->
 <div class="toolbar-row">
-  <span class="toolbar-title">
-    {% if active_status == 'bound' %}Bounding Queue
-    {% elif active_status == 'classify' %}Classification Queue
-    {% elif active_status == 'specify' %}Specification Queue
-    {% elif active_status == 'complete' %}Completed Images
-    {% elif active_cluster %}Cluster {{ active_cluster }}
-    {% else %}All Images
-    {% endif %}
-  </span>
-  <span class="toolbar-count">{{ total_count }} image{{ total_count|pluralize:"s" }}</span>
+  <div id="dynamic-toolbar-text" style="display:contents">
+    <span class="toolbar-title">
+      {% if active_status == 'bound' %}Bounding Queue
+      {% elif active_status == 'classify' %}Classification Queue
+      {% elif active_status == 'specify' %}Specification Queue
+      {% elif active_status == 'complete' %}Completed Images
+      {% elif active_cluster %}Cluster {{ active_cluster }}
+      {% else %}All Images
+      {% endif %}
+    </span>
+    <span class="toolbar-count">{{ total_count }} image{{ total_count|pluralize:"s" }}</span>
+  </div>
 
   {% if role == "annotator" or role == "admin" %}
   <button class="upload-trigger" onclick="document.getElementById('file-input').click()">
@@ -516,37 +640,77 @@
   {% endif %}
 </div>
 
-<!-- ── CLUSTER CHIPS ───────────────────────────────────────────────── -->
-{% if clusters %}
-<div class="cluster-section">
-  <span class="cluster-label">Cluster</span>
-  <a class="chip {% if not active_cluster %}active{% endif %}"
-     href="?{% if active_status %}status={{ active_status }}{% endif %}">All</a>
-  {% for c in clusters %}
-  <a class="chip {% if active_cluster == c|stringformat:'d' %}active{% endif %}"
-     href="?{% if active_status %}status={{ active_status }}&{% endif %}cluster={{ c }}">
-    {{ c }}
-  </a>
-  {% endfor %}
+<!-- ── SEMANTIC SEARCH ───────────────────────────────────────────────── -->
+<div id="dynamic-search" class="search-row">
+  <form method="get" class="search-form" id="search-form">
+    {% if active_cluster %}<input type="hidden" name="cluster" value="{{ active_cluster }}">{% endif %}
+    {% if active_dive %}<input type="hidden" name="dive" value="{{ active_dive }}">{% endif %}
+    <div class="search-input-wrap">
+      <span class="search-icon">⌕</span>
+      <input type="text" name="q" value="{{ search_query }}"
+             placeholder="Search completed images… e.g. coral, fish, acropora"
+             class="search-input" autocomplete="off">
+      {% if search_query %}
+        <a href="?{% if active_cluster %}cluster={{ active_cluster }}&{% endif %}" class="search-clear" title="Clear search">×</a>
+      {% endif %}
+    </div>
+    <button type="submit" class="search-btn" id="search-btn">Search</button>
+  </form>
+  {% if search_query %}
+  <div class="search-banner">
+    // Showing completed images matching <span class="search-term">"{{ search_query }}"</span> — {{ total_count }} result{{ total_count|pluralize }}
+  </div>
+  {% endif %}
 </div>
-{% endif %}
-<!-- ── CATEGORY CHIPS ──────────────────────────────────────────────── -->
-<div class="cluster-section">
+
+<!-- ── CATEGORY + DIVE + CLUSTER SEARCH ──────────────────────────────── -->
+<div id="dynamic-chips" class="cluster-section">
   <span class="cluster-label">Category</span>
   <a class="chip {% if not active_category %}active{% endif %}"
-     href="?{% if active_status %}status={{ active_status }}&{% endif %}{% if active_cluster %}cluster={{ active_cluster }}&{% endif %}">All</a>
+     href="?{% if active_status %}status={{ active_status }}&{% endif %}{% if active_cluster %}cluster={{ active_cluster }}&{% endif %}{% if active_dive %}dive={{ active_dive }}&{% endif %}">All</a>
   {% for cat, label in categories %}
   <a class="chip {% if active_category == cat %}active{% endif %}"
-     href="?{% if active_status %}status={{ active_status }}&{% endif %}{% if active_cluster %}cluster={{ active_cluster }}&{% endif %}category={{ cat }}"
+     href="?{% if active_status %}status={{ active_status }}&{% endif %}{% if active_cluster %}cluster={{ active_cluster }}&{% endif %}{% if active_dive %}dive={{ active_dive }}&{% endif %}category={{ cat }}"
      style="--chip-color: {{ cat|lower }}">
     {{ label }}
   </a>
   {% endfor %}
+  {% if clusters %}
+  <form class="cluster-search-form" method="get" action="">
+    {% if active_status %}<input type="hidden" name="status" value="{{ active_status }}">{% endif %}
+    {% if active_category %}<input type="hidden" name="category" value="{{ active_category }}">{% endif %}
+    {% if active_dive %}<input type="hidden" name="dive" value="{{ active_dive }}">{% endif %}
+    <input type="number" name="cluster"
+           value="{{ active_cluster }}"
+           placeholder="cluster"
+           min="0" max="{{ max_cluster }}"
+           class="cluster-input">
+    <span class="cluster-total">/{{ max_cluster }}</span>
+    {% if active_cluster %}
+    <a class="cluster-clear"
+       href="?{% if active_status %}status={{ active_status }}&{% endif %}{% if active_category %}category={{ active_category }}&{% endif %}{% if active_dive %}dive={{ active_dive }}{% endif %}">×</a>
+    {% endif %}
+  </form>
+  {% endif %}
+
+  {% if dives %}
+  <div style="width:100%;display:flex;align-items:center;gap:6px;flex-wrap:wrap;padding-top:6px">
+    <span class="cluster-label">Dive</span>
+    <a class="chip {% if not active_dive %}active{% endif %}"
+       href="?{% if active_status %}status={{ active_status }}&{% endif %}{% if active_cluster %}cluster={{ active_cluster }}&{% endif %}{% if active_category %}category={{ active_category }}&{% endif %}">All</a>
+    {% for dive in dives %}
+    <a class="chip {% if active_dive == dive.id %}active{% endif %}"
+       href="?{% if active_status %}status={{ active_status }}&{% endif %}{% if active_cluster %}cluster={{ active_cluster }}&{% endif %}{% if active_category %}category={{ active_category }}&{% endif %}dive={{ dive.id }}">
+      {{ dive.name }}
+    </a>
+    {% endfor %}
+  </div>
+  {% endif %}
 </div>
 
 <!-- ── IMAGE GRID ───────────────────────────────────────────────────── -->
 {% if page_obj %}
-<div class="image-grid">
+<div id="dynamic-grid" class="image-grid">
   {% for img in page_obj %}
   <a class="image-card" href="{% url 'annotator:workspace' img.id img.status %}">
     <img class="card-thumb" src="{{ img.thumbnail_url }}" alt="{{ img.original_filename }}" loading="lazy">
@@ -561,7 +725,7 @@
   {% endfor %}
 </div>
 {% else %}
-<div class="empty-state">
+<div id="dynamic-grid" class="empty-state">
   <div class="empty-state-icon">
     {% if active_status == 'complete' %}✓
     {% else %}⬡{% endif %}
@@ -593,9 +757,9 @@
 
 <!-- ── PAGINATION ───────────────────────────────────────────────── -->
 {% if page_obj.paginator.num_pages > 1 %}
-<div class="pagination-bar">
+<div id="dynamic-pagination" class="pagination-bar">
   {% if page_obj.has_previous %}
-  <a class="page-btn" href="?{% if active_status %}status={{ active_status }}&{% endif %}{% if active_cluster %}cluster={{ active_cluster }}&{% endif %}page={{ page_obj.previous_page_number }}">← Prev</a>
+  <a class="page-btn" href="?{% if active_status %}status={{ active_status }}&{% endif %}{% if active_cluster %}cluster={{ active_cluster }}&{% endif %}{% if active_dive %}dive={{ active_dive }}&{% endif %}{% if search_query %}q={{ search_query }}&{% endif %}page={{ page_obj.previous_page_number }}">← Prev</a>
   {% else %}
   <span class="page-btn disabled">← Prev</span>
   {% endif %}
@@ -607,14 +771,29 @@
   </span>
 
   {% if page_obj.has_next %}
-  <a class="page-btn" href="?{% if active_status %}status={{ active_status }}&{% endif %}{% if active_cluster %}cluster={{ active_cluster }}&{% endif %}page={{ page_obj.next_page_number }}">Next →</a>
+  <a class="page-btn" href="?{% if active_status %}status={{ active_status }}&{% endif %}{% if active_cluster %}cluster={{ active_cluster }}&{% endif %}{% if active_dive %}dive={{ active_dive }}&{% endif %}{% if search_query %}q={{ search_query }}&{% endif %}page={{ page_obj.next_page_number }}">Next →</a>
   {% else %}
   <span class="page-btn disabled">Next →</span>
   {% endif %}
 </div>
+{% else %}
+<div id="dynamic-pagination"></div>
 {% endif %}
 
 <script>
+/* ── Thumbnail shimmer → fade in ────────────────────────────────── */
+function initThumbs() {
+  document.querySelectorAll('.card-thumb:not([data-thumb-init])').forEach(img => {
+    img.dataset.thumbInit = '1';
+    if (img.complete && img.naturalWidth) img.classList.add('loaded');
+    else {
+      img.addEventListener('load',  () => img.classList.add('loaded'));
+      img.addEventListener('error', () => img.classList.add('loaded'));
+    }
+  });
+}
+initThumbs();
+
 /* ── File upload ─────────────────────────────────────────────────── */
 async function uploadFile(input) {
   const file = input.files[0];
@@ -655,32 +834,103 @@ document.addEventListener("drop", async e => {
 });
 {% endif %}
 
-/* ── Import from Supabase ─────────────────────────────────────────── */
-async function importFromSupabase(event) {
-  event.stopPropagation();
-  const btn = document.getElementById("import-btn");
-  const orig = btn.textContent;
-  btn.textContent = "Importing…";
-  btn.style.pointerEvents = "none";
-  btn.style.opacity = "0.6";
+/* ── AJAX partial navigation ─────────────────────────────────── */
+history.replaceState({ url: location.href }, '');
 
-  const r = await fetch("/annotator/import-supabase/", {
-    method: "POST",
-    headers: { "X-CSRFToken": "{{ csrf_token }}" },
-  });
-  const d = await r.json();
-
-  btn.textContent = orig;
-  btn.style.pointerEvents = "";
-  btn.style.opacity = "";
-
-  if (d.error) {
-    alert("Import failed: " + d.error);
-  } else {
-    alert(`Done!  Imported: ${d.imported}  ·  Already existed: ${d.skipped}`);
-    if (d.imported > 0) window.location.reload();
-  }
+function showSkeletons() {
+  const grid = document.getElementById('dynamic-grid');
+  if (!grid) return;
+  grid.className = 'image-grid';
+  grid.innerHTML = Array.from({length: 12}, () => `
+    <div class="image-card" style="pointer-events:none">
+      <div class="card-thumb" style="opacity:1"></div>
+      <div class="card-body">
+        <div style="background:linear-gradient(90deg,#1a1a1a 25%,#2a2a2a 50%,#1a1a1a 75%);
+                    background-size:800px 100%;animation:shimmer 1.4s infinite linear;
+                    height:10px;border-radius:2px;margin-bottom:8px;width:70%"></div>
+        <div style="background:linear-gradient(90deg,#1a1a1a 25%,#2a2a2a 50%,#1a1a1a 75%);
+                    background-size:800px 100%;animation:shimmer 1.4s infinite linear;
+                    height:8px;border-radius:2px;width:40%"></div>
+      </div>
+    </div>
+  `).join('');
 }
+
+function updatePipelineHighlight(targetStatus) {
+  document.querySelectorAll('#pipeline-strip .pipeline-stage').forEach(el => {
+    const qs = (el.getAttribute('href') || '').split('?')[1] || '';
+    const s = new URLSearchParams(qs).get('status') || '';
+    el.classList.toggle('active', s === (targetStatus || ''));
+  });
+}
+
+let _ajaxCtrl = null;
+
+async function navigatePartial(url, push) {
+  if (_ajaxCtrl) _ajaxCtrl.abort();
+  _ajaxCtrl = new AbortController();
+
+  const params = new URLSearchParams(new URL(url, location.origin).search);
+  updatePipelineHighlight(params.get('status') || '');
+  showSkeletons();
+
+  if (push !== false) history.pushState({ url }, '', url);
+  else history.replaceState({ url }, '', url);
+
+  const sep = url.includes('?') ? '&' : '?';
+  let html;
+  try {
+    const resp = await fetch(url + sep + 'partial=1', { signal: _ajaxCtrl.signal });
+    if (resp.url.includes('/login/')) { window.location = resp.url; return; }
+    if (!resp.ok) { window.location = url; return; }
+    html = await resp.text();
+  } catch (err) {
+    if (err.name === 'AbortError') return;
+    window.location = url;
+    return;
+  }
+
+  const doc = new DOMParser().parseFromString(html, 'text/html');
+  ['dynamic-toolbar-text','dynamic-search','dynamic-chips','dynamic-grid','dynamic-pagination'].forEach(id => {
+    const incoming = doc.getElementById(id);
+    const existing = document.getElementById(id);
+    if (incoming && existing) existing.replaceWith(incoming);
+  });
+  initThumbs();
+}
+
+window.addEventListener('popstate', e => {
+  const url = (e.state && e.state.url) || location.href;
+  navigatePartial(url, false);
+});
+
+document.addEventListener('click', function(e) {
+  const a = e.target.closest('a[href]');
+  if (!a) return;
+  const href = a.getAttribute('href');
+  if (!href || href.startsWith('#')) return;
+  // Only intercept index filter links
+  if (!href.startsWith('?') && href !== '/annotator/' && !href.startsWith('/annotator/?')) return;
+  e.preventDefault();
+  const url = href.startsWith('?') ? location.pathname + href : href;
+  navigatePartial(url, true);
+});
+
+document.addEventListener('submit', function(e) {
+  const form = e.target.closest('form');
+  if (!form || (form.method && form.method.toLowerCase() !== 'get')) return;
+  const action = form.getAttribute('action') || '';
+  if (action && !action.startsWith('/annotator/') && action !== '') return;
+  e.preventDefault();
+  const params = new URLSearchParams(new FormData(form));
+  // Show "Searching…" on the search button if present
+  const btn = form.querySelector('.search-btn');
+  if (btn && form.querySelector('.search-input').value.trim()) {
+    btn.disabled = true; btn.textContent = 'Searching…';
+  }
+  [...params.entries()].forEach(([k, v]) => { if (!v) params.delete(k); });
+  navigatePartial('/annotator/?' + params.toString(), true);
+});
 </script>
 </body>
 </html>

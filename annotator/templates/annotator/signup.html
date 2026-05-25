@@ -1,0 +1,302 @@
+{% load static %}
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>AS · Sign Up</title>
+<link rel="icon" type="image/svg+xml" href="{% static 'annotator/favicon.svg' %}">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@300;400;500;600&family=Syne:wght@400;600;700;800&display=swap" rel="stylesheet">
+<style>
+:root {
+  --bg:#1e1e1e; --bg-alt:#1a1a1a; --bg-mid:#252525; --bg-panel:#2a2a2a;
+  --bg-hover:#323232; --border:#3a3a3a; --border-hi:#505050;
+  --text:#d4d4d4; --text-muted:#7a7a7a; --text-dim:#555;
+  --accent:#4a9eff; --amber:#f5a623; --green:#4ecb71;
+  --mono:'JetBrains Mono', monospace; --sans:'Syne', sans-serif;
+}
+*,*::before,*::after { box-sizing:border-box; margin:0; padding:0; }
+html,body { height:100%; }
+body {
+  background:var(--bg); color:var(--text);
+  font-family:var(--mono); font-size:12px; line-height:1.5;
+  display:flex; flex-direction:column; min-height:100vh;
+}
+a { color:inherit; text-decoration:none; }
+
+/* ── Nav ───────────────────────────────────────────────── */
+.nav {
+  height:52px; border-bottom:1px solid var(--border);
+  background:rgba(37,37,37,.95); backdrop-filter:blur(8px);
+  padding:0 28px; display:flex; align-items:center; gap:16px;
+}
+.logo { font-family:var(--sans); font-size:22px; font-weight:800; letter-spacing:-.5px; }
+.logo-a { color:var(--accent); }
+.nav-sub { color:var(--text-muted); font-size:10px; letter-spacing:.5px; flex:1; }
+@media (max-width:640px) { .nav-sub { display:none; } }
+
+/* ── Layout ─────────────────────────────────────────────── */
+.page {
+  flex:1; display:grid;
+  grid-template-columns:1fr;
+  position:relative; overflow:hidden;
+}
+@media (min-width:900px) {
+  .page { grid-template-columns:1fr 1fr; }
+}
+
+/* ── Left panel ─────────────────────────────────────────── */
+.left {
+  display:none; position:relative; overflow:hidden;
+  border-right:1px solid var(--border);
+  background:var(--bg-alt);
+  padding:60px 48px;
+  flex-direction:column; justify-content:space-between;
+}
+@media (min-width:900px) { .left { display:flex; } }
+
+.left-bg-grid {
+  position:absolute; inset:0; pointer-events:none; opacity:.04;
+  background-image:linear-gradient(var(--accent) 1px, transparent 1px),
+                   linear-gradient(90deg, var(--accent) 1px, transparent 1px);
+  background-size:40px 40px;
+}
+.left-bg-glow {
+  position:absolute; inset:0; pointer-events:none; opacity:.25;
+  background:radial-gradient(circle at 30% 60%, #1a3d6e 0%, transparent 55%);
+}
+
+.left-content { position:relative; }
+.left-eyebrow { font-size:10px; color:var(--text-muted); text-transform:uppercase; letter-spacing:2px; margin-bottom:20px; }
+.left-title { font-family:var(--sans); font-weight:800; font-size:clamp(28px,3.5vw,42px); line-height:1.1; letter-spacing:-.5px; color:var(--text); }
+.left-title .accent { color:var(--accent); }
+.left-title .amber  { color:var(--amber); }
+.left-desc { margin-top:20px; color:var(--text-muted); font-size:12px; line-height:1.8; max-width:380px; }
+
+.pipeline-steps { margin-top:48px; display:flex; flex-direction:column; gap:0; }
+.step { display:flex; align-items:flex-start; gap:16px; padding:16px 0; border-top:1px solid var(--border); }
+.step:last-child { border-bottom:1px solid var(--border); }
+.step-num { font-size:9px; color:var(--text-dim); letter-spacing:1px; min-width:52px; padding-top:2px; }
+.step-body {}
+.step-label { font-family:var(--sans); font-weight:700; font-size:13px; }
+.step-role  { font-size:10px; color:var(--text-muted); text-transform:uppercase; letter-spacing:1px; margin-top:2px; }
+
+.left-footer { position:relative; font-size:10px; color:var(--text-dim); }
+
+/* ── Right panel (form) ──────────────────────────────────── */
+.right {
+  display:flex; align-items:center; justify-content:center;
+  padding:48px 28px; position:relative; overflow:hidden;
+}
+.right-bg {
+  position:absolute; inset:0; pointer-events:none; opacity:.15;
+  background:radial-gradient(circle at 70% 30%, #1a3d6e 0%, transparent 50%);
+}
+
+.card {
+  position:relative; width:100%; max-width:380px;
+  background:var(--bg-panel); border:1px solid var(--border);
+  border-radius:2px; padding:36px 32px;
+}
+
+.card-eyebrow {
+  font-size:10px; color:var(--accent); text-transform:uppercase;
+  letter-spacing:2px; margin-bottom:6px;
+}
+.card-title {
+  font-family:var(--sans); font-weight:800; font-size:24px;
+  color:var(--text); letter-spacing:-.3px; margin-bottom:4px;
+}
+.card-sub { font-size:11px; color:var(--text-muted); margin-bottom:32px; }
+
+/* Form field styling */
+.field { margin-bottom:20px; display:flex; flex-direction:column; gap:6px; }
+.field label {
+  font-size:10px; text-transform:uppercase; letter-spacing:1px;
+  color:var(--text-muted);
+}
+.field input[type="text"],
+.field input[type="password"],
+.field input[type="email"] {
+  width:100%; background:var(--bg-mid); border:1px solid var(--border);
+  border-radius:2px; color:var(--text); font-family:var(--mono);
+  font-size:12px; padding:10px 12px; outline:none;
+  transition:border-color .15s;
+}
+.field input[type="text"]:focus,
+.field input[type="password"]:focus,
+.field input[type="email"]:focus {
+  border-color:var(--accent);
+}
+.field input::placeholder { color:var(--text-dim); }
+
+/* Error list from Django */
+.field ul.errorlist {
+  list-style:none; margin:0; padding:0;
+}
+.field ul.errorlist li {
+  font-size:10px; color:#f87171; margin-top:4px;
+}
+
+/* Non-field errors */
+.non-field-errors { margin-bottom:16px; list-style:none; padding:0; }
+.non-field-errors li {
+  background:rgba(248,113,113,.1); border:1px solid rgba(248,113,113,.3);
+  border-radius:2px; padding:8px 12px;
+  font-size:11px; color:#f87171;
+}
+
+/* Help text (Django's password hints) */
+.field .helptext {
+  font-size:10px; color:var(--text-dim); line-height:1.6;
+}
+.field .helptext ul { list-style:none; padding:0; margin:0; }
+
+.btn-submit {
+  width:100%; margin-top:8px;
+  background:var(--accent); color:#000;
+  font-family:var(--sans); font-weight:700; font-size:13px;
+  border:none; border-radius:2px; padding:12px;
+  cursor:pointer; transition:opacity .15s; letter-spacing:.2px;
+}
+.btn-submit:hover { opacity:.85; }
+
+.card-back {
+  margin-top:24px; text-align:center;
+  font-size:10px; color:var(--text-dim);
+}
+.card-back a { color:var(--accent); }
+.card-back a:hover { text-decoration:underline; }
+
+/* ── Decorative corner tag ───────────────────────────────── */
+.corner-tag {
+  position:absolute; top:16px; right:16px;
+  font-size:9px; color:var(--text-dim); letter-spacing:1px;
+}
+</style>
+</head>
+<body>
+
+<header class="nav">
+  <a href="/" class="logo"><span class="logo-a">A</span><span>S</span></a>
+  <span class="nav-sub">Marine Image Annotator · Aquatic Sciences</span>
+</header>
+
+<div class="page">
+
+  <!-- Left: branding panel -->
+  <div class="left">
+    <div class="left-bg-grid"></div>
+    <div class="left-bg-glow"></div>
+    <div class="left-content">
+      <div class="left-eyebrow">// Marine Image Annotator</div>
+      <h2 class="left-title">
+        Annotate the ocean,<br>
+        <span class="accent">box</span> by <span class="amber">box</span>.
+      </h2>
+      <p class="left-desc">
+        A role-based pipeline for annotating underwater imagery —
+        from bounding to classification to species specification.
+      </p>
+      <div class="pipeline-steps">
+        <div class="step">
+          <span class="step-num">STAGE 01</span>
+          <div class="step-body">
+            <div class="step-label" style="color:#4a9eff">Bounding</div>
+            <div class="step-role">Annotator</div>
+          </div>
+        </div>
+        <div class="step">
+          <span class="step-num">STAGE 02</span>
+          <div class="step-body">
+            <div class="step-label" style="color:#f5a623">Classifying</div>
+            <div class="step-role">Classifier · DINOv3 AI</div>
+          </div>
+        </div>
+        <div class="step">
+          <span class="step-num">STAGE 03</span>
+          <div class="step-body">
+            <div class="step-label" style="color:#ce93d8">Specifying</div>
+            <div class="step-role">Researcher</div>
+          </div>
+        </div>
+        <div class="step">
+          <span class="step-num">STAGE 04</span>
+          <div class="step-body">
+            <div class="step-label" style="color:#4ecb71">Complete</div>
+            <div class="step-role">Export → JSON</div>
+          </div>
+        </div>
+      </div>
+    </div>
+    <div class="left-footer">Aquatic Sciences · Marine Research Workflow</div>
+  </div>
+
+  <!-- Right: signup form -->
+  <div class="right">
+    <div class="right-bg"></div>
+    <div class="card">
+      <span class="corner-tag">NEW ACCOUNT</span>
+      <div class="card-eyebrow">// Create account</div>
+      <div class="card-title">Join the lab</div>
+      <div class="card-sub">Create your account to get started.</div>
+
+      <form method="post" action="{% url 'signup' %}">
+        {% csrf_token %}
+
+        {% if form.non_field_errors %}
+          <ul class="non-field-errors">
+            {% for error in form.non_field_errors %}
+              <li>{{ error }}</li>
+            {% endfor %}
+          </ul>
+        {% endif %}
+
+        <div class="field">
+          <label for="{{ form.username.id_for_label }}">Username:</label>
+          {{ form.username }}
+          {% if form.username.errors %}
+            <ul class="errorlist">
+              {% for error in form.username.errors %}<li>{{ error }}</li>{% endfor %}
+            </ul>
+          {% endif %}
+        </div>
+
+        <div class="field">
+          <label for="{{ form.password1.id_for_label }}">Password:</label>
+          {{ form.password1 }}
+          {% if form.password1.errors %}
+            <ul class="errorlist">
+              {% for error in form.password1.errors %}<li>{{ error }}</li>{% endfor %}
+            </ul>
+          {% endif %}
+          {% if form.password1.help_text %}
+            <span class="helptext">{{ form.password1.help_text }}</span>
+          {% endif %}
+        </div>
+
+        <div class="field">
+          <label for="{{ form.password2.id_for_label }}">Confirm password:</label>
+          {{ form.password2 }}
+          {% if form.password2.errors %}
+            <ul class="errorlist">
+              {% for error in form.password2.errors %}<li>{{ error }}</li>{% endfor %}
+            </ul>
+          {% endif %}
+        </div>
+
+        <button type="submit" class="btn-submit">Create account →</button>
+      </form>
+
+      <div class="card-back">
+        Already have an account? <a href="{% url 'login' %}">Sign in →</a>
+      </div>
+    </div>
+  </div>
+
+</div>
+
+</body>
+</html>

@@ -8,7 +8,7 @@ from pathlib import Path
 from typing import List, Optional
 
 import yaml
-from pydantic import BaseModel, field_validator
+from pydantic import BaseModel
 
 
 # Project root: AquaSite/
@@ -45,21 +45,12 @@ class TrainingConfig(BaseModel):
                                         # "box"   = one sample per labeled BoundingBox (crop)
     min_box_fraction: float = 0.005     # box mode: skip boxes below this fraction of image area
 
-    @field_validator("device")
-    @classmethod
-    def resolve_device(cls, v):
-        if v == "auto":
-            import torch
-            return "cuda" if torch.cuda.is_available() else "cpu"
-        return v
-
-    @field_validator("sample_mode")
-    @classmethod
-    def check_sample_mode(cls, v):
-        v = v.lower()
-        if v not in {"image", "box"}:
-            raise ValueError(f"training.sample_mode must be 'image' or 'box', got {v!r}")
-        return v
+    # ── Stratified train / val / test split controls ────────────────────
+    # The dataset is split *inside each class* using these fractions so
+    # train, val, and test all see proportional class representation.
+    # train_frac is implicit: 1.0 - val_frac - test_frac.
+    val_frac: float = 0.15              # share of each class held out for validation
+    test_frac: float = 0.15             # share of each class held out for final test
 
 
 class EmbeddingConfig(BaseModel):
@@ -72,13 +63,12 @@ class ClassifierConfig(BaseModel):
     hidden_dims: List[int] = []  # MLP only; ignored when type="linear"
     dropout: float = 0.3  # MLP only
 
-    @field_validator("type")
-    @classmethod
-    def check_type(cls, v):
-        v = v.lower()
-        if v not in {"linear", "mlp"}:
-            raise ValueError(f"classifier.type must be 'linear' or 'mlp', got {v!r}")
-        return v
+
+class AutoBoxConfig(BaseModel):
+    """Knobs for the auto-box tiler (ml/auto_box.py)."""
+    grid: int = 5                  # NxN grid covering the full frame (5 → 25 tiles)
+    padding: float = 0.0           # optional context padding per tile (fraction of tile side)
+    max_boxes: int = 50            # safety cap; ignored unless grid*grid exceeds it
 
 
 class MLConfig(BaseModel):
@@ -89,6 +79,7 @@ class MLConfig(BaseModel):
     training: TrainingConfig = TrainingConfig()
     embedding: EmbeddingConfig = EmbeddingConfig()
     classifier: ClassifierConfig = ClassifierConfig()
+    auto_box: AutoBoxConfig = AutoBoxConfig()
 
     # Populated from .env at load time
     supabase_url: str = ""
@@ -105,6 +96,26 @@ def load_config(config_path: Optional[str] = None) -> MLConfig:
         raw = yaml.safe_load(f)
 
     config = MLConfig(**raw)
+
+    # Normalise + validate fields that used to be pydantic field_validators.
+    # Pulled out so the module works on both pydantic v1 and v2.
+    if config.training.device == "auto":
+        import torch
+        config.training.device = "cuda" if torch.cuda.is_available() else "cpu"
+
+    config.training.sample_mode = config.training.sample_mode.lower()
+    if config.training.sample_mode not in {"image", "box"}:
+        raise ValueError(
+            f"training.sample_mode must be 'image' or 'box', "
+            f"got {config.training.sample_mode!r}"
+        )
+
+    config.classifier.type = config.classifier.type.lower()
+    if config.classifier.type not in {"linear", "mlp"}:
+        raise ValueError(
+            f"classifier.type must be 'linear' or 'mlp', "
+            f"got {config.classifier.type!r}"
+        )
 
     # Load secrets from environment / .env
     # python-decouple is already installed; Django settings may have loaded .env

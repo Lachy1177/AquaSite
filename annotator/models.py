@@ -77,6 +77,7 @@ class AnalysisImage(models.Model):
         if not self.boxes.exists():
             return
         unlabeled = self.boxes.filter(taxonomy_label__isnull=True).exists()
+        
         if not unlabeled:
             self.status = "complete"
             self.save(update_fields=["status"])

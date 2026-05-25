@@ -1,0 +1,135 @@
+<div id="dynamic-toolbar-text" style="display:contents">
+  <span class="toolbar-title">
+    {% if active_status == 'bound' %}Bounding Queue
+    {% elif active_status == 'classify' %}Classification Queue
+    {% elif active_status == 'specify' %}Specification Queue
+    {% elif active_status == 'complete' %}Completed Images
+    {% elif active_cluster %}Cluster {{ active_cluster }}
+    {% else %}All Images
+    {% endif %}
+  </span>
+  <span class="toolbar-count">{{ total_count }} image{{ total_count|pluralize:"s" }}</span>
+</div>
+
+<div id="dynamic-search" class="search-row">
+  <form method="get" class="search-form">
+    {% if active_cluster %}<input type="hidden" name="cluster" value="{{ active_cluster }}">{% endif %}
+    {% if active_dive %}<input type="hidden" name="dive" value="{{ active_dive }}">{% endif %}
+    <div class="search-input-wrap">
+      <span class="search-icon">⌕</span>
+      <input type="text" name="q" value="{{ search_query }}"
+             placeholder="Search completed images… e.g. coral, fish, acropora"
+             class="search-input" autocomplete="off">
+      {% if search_query %}
+        <a href="?{% if active_cluster %}cluster={{ active_cluster }}&{% endif %}" class="search-clear" title="Clear search">×</a>
+      {% endif %}
+    </div>
+    <button type="submit" class="search-btn">Search</button>
+  </form>
+  {% if search_query %}
+  <div class="search-banner">
+    // Showing completed images matching <span class="search-term">"{{ search_query }}"</span> — {{ total_count }} result{{ total_count|pluralize }}
+  </div>
+  {% endif %}
+</div>
+
+<div id="dynamic-chips" class="cluster-section">
+  <span class="cluster-label">Category</span>
+  <a class="chip {% if not active_category %}active{% endif %}"
+     href="?{% if active_status %}status={{ active_status }}&{% endif %}{% if active_cluster %}cluster={{ active_cluster }}&{% endif %}{% if active_dive %}dive={{ active_dive }}&{% endif %}">All</a>
+  {% for cat, label in categories %}
+  <a class="chip {% if active_category == cat %}active{% endif %}"
+     href="?{% if active_status %}status={{ active_status }}&{% endif %}{% if active_cluster %}cluster={{ active_cluster }}&{% endif %}{% if active_dive %}dive={{ active_dive }}&{% endif %}category={{ cat }}"
+     style="--chip-color: {{ cat|lower }}">
+    {{ label }}
+  </a>
+  {% endfor %}
+  {% if clusters %}
+  <form class="cluster-search-form" method="get" action="">
+    {% if active_status %}<input type="hidden" name="status" value="{{ active_status }}">{% endif %}
+    {% if active_category %}<input type="hidden" name="category" value="{{ active_category }}">{% endif %}
+    {% if active_dive %}<input type="hidden" name="dive" value="{{ active_dive }}">{% endif %}
+    <input type="number" name="cluster"
+           value="{{ active_cluster }}"
+           placeholder="cluster"
+           min="0" max="{{ max_cluster }}"
+           class="cluster-input">
+    <span class="cluster-total">/{{ max_cluster }}</span>
+    {% if active_cluster %}
+    <a class="cluster-clear"
+       href="?{% if active_status %}status={{ active_status }}&{% endif %}{% if active_category %}category={{ active_category }}&{% endif %}{% if active_dive %}dive={{ active_dive }}{% endif %}">×</a>
+    {% endif %}
+  </form>
+  {% endif %}
+
+  {% if dives %}
+  <div style="width:100%;display:flex;align-items:center;gap:6px;flex-wrap:wrap;padding-top:6px">
+    <span class="cluster-label">Dive</span>
+    <a class="chip {% if not active_dive %}active{% endif %}"
+       href="?{% if active_status %}status={{ active_status }}&{% endif %}{% if active_cluster %}cluster={{ active_cluster }}&{% endif %}{% if active_category %}category={{ active_category }}&{% endif %}">All</a>
+    {% for dive in dives %}
+    <a class="chip {% if active_dive == dive.id %}active{% endif %}"
+       href="?{% if active_status %}status={{ active_status }}&{% endif %}{% if active_cluster %}cluster={{ active_cluster }}&{% endif %}{% if active_category %}category={{ active_category }}&{% endif %}dive={{ dive.id }}">
+      {{ dive.name }}
+    </a>
+    {% endfor %}
+  </div>
+  {% endif %}
+</div>
+
+{% if page_obj %}
+<div id="dynamic-grid" class="image-grid">
+  {% for img in page_obj %}
+  <a class="image-card" href="/annotator/{{ img.id }}/{{ img.status }}/">
+    <img class="card-thumb" src="{{ img.thumbnail_url }}" alt="{{ img.original_filename }}" loading="lazy">
+    <div class="card-body">
+      <div class="card-name">{{ img.original_filename }}</div>
+      <div class="card-meta">
+        <span class="card-boxes">{{ img.box_count }} box{{ img.box_count|pluralize:"es" }}</span>
+        <span class="status-chip status-{{ img.status }}">{{ img.get_status_display }}</span>
+      </div>
+    </div>
+  </a>
+  {% endfor %}
+</div>
+{% else %}
+<div id="dynamic-grid" class="empty-state">
+  <div class="empty-state-icon">
+    {% if active_status == 'complete' %}✓
+    {% else %}⬡{% endif %}
+  </div>
+  <div class="empty-state-title">
+    {% if active_status %}No images at this stage{% else %}No images yet{% endif %}
+  </div>
+  <div class="empty-state-sub">
+    {% if active_status == 'complete' %}No images have reached the complete stage yet.
+    {% elif active_status %}Images will appear here once they reach this stage.
+    {% else %}No images have been uploaded yet.
+    {% endif %}
+  </div>
+</div>
+{% endif %}
+
+{% if page_obj.paginator.num_pages > 1 %}
+<div id="dynamic-pagination" class="pagination-bar">
+  {% if page_obj.has_previous %}
+  <a class="page-btn" href="?{% if active_status %}status={{ active_status }}&{% endif %}{% if active_cluster %}cluster={{ active_cluster }}&{% endif %}{% if active_dive %}dive={{ active_dive }}&{% endif %}{% if search_query %}q={{ search_query }}&{% endif %}page={{ page_obj.previous_page_number }}">← Prev</a>
+  {% else %}
+  <span class="page-btn disabled">← Prev</span>
+  {% endif %}
+
+  <span class="page-info">
+    Page {{ page_obj.number }} of {{ page_obj.paginator.num_pages }}
+    &nbsp;·&nbsp;
+    {{ total_count }} total
+  </span>
+
+  {% if page_obj.has_next %}
+  <a class="page-btn" href="?{% if active_status %}status={{ active_status }}&{% endif %}{% if active_cluster %}cluster={{ active_cluster }}&{% endif %}{% if active_dive %}dive={{ active_dive }}&{% endif %}{% if search_query %}q={{ search_query }}&{% endif %}page={{ page_obj.next_page_number }}">Next →</a>
+  {% else %}
+  <span class="page-btn disabled">Next →</span>
+  {% endif %}
+</div>
+{% else %}
+<div id="dynamic-pagination"></div>
+{% endif %}

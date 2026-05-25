@@ -5,6 +5,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>AS · {{ image.original_filename }}</title>
+<link rel="icon" type="image/svg+xml" href="{% static 'annotator/favicon.svg' %}">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@300;400;500;600&family=Syne:wght@400;600;700;800&display=swap" rel="stylesheet">
 <style>
@@ -328,6 +329,30 @@
     display: block;
     max-width: 100%;
     height: auto;
+    opacity: 0;
+    transition: opacity 0.35s ease;
+  }
+
+  @keyframes shimmer {
+    0%   { background-position: -800px 0; }
+    100% { background-position:  800px 0; }
+  }
+  #canvas-shimmer {
+    position: absolute;
+    inset: 0;
+    z-index: 1;
+    background: linear-gradient(90deg, #1e1e1e 25%, #2a2a2a 50%, #1e1e1e 75%);
+    background-size: 800px 100%;
+    animation: shimmer 1.6s infinite linear;
+    pointer-events: none;
+  }
+  .box-skeleton {
+    height: 28px;
+    border-radius: 2px;
+    margin-bottom: 4px;
+    background: linear-gradient(90deg, #252525 25%, #303030 50%, #252525 75%);
+    background-size: 400px 100%;
+    animation: shimmer 1.4s infinite linear;
   }
 
   /* ─── BOUNDING BOXES ────────────────────────────────────────── */
@@ -613,17 +638,22 @@
     Next →
   </button>
 
-  <!-- Advance status + go to next — label and colour per stage -->
-  {% if role == "annotator" or role == "admin" and active_tab == "bound" %}
-  <button class="q-btn submit-bound" id="btn-submit-next" onclick="submitAndNext('bound')">
+  <!-- Advance status + go to next — all role-appropriate variants rendered, JS shows the right one -->
+  {% if role == "annotator" or role == "admin" %}
+  <button class="q-btn submit-bound tab-submit-btn" data-for-tab="bound"
+          onclick="submitAndNext('bound')" style="display:none">
     Send to Classify &amp; Next
   </button>
-  {% elif role == "classifier" or role == "admin" and active_tab == "classify" %}
-  <button class="q-btn submit-classify" id="btn-submit-next" onclick="submitAndNext('classify')">
+  {% endif %}
+  {% if role == "classifier" or role == "admin" %}
+  <button class="q-btn submit-classify tab-submit-btn" data-for-tab="classify"
+          onclick="submitAndNext('classify')" style="display:none">
     Send to Specify &amp; Next
   </button>
-  {% elif role == "researcher" or role == "admin" and active_tab == "specify" %}
-  <button class="q-btn submit-specify" id="btn-submit-next" onclick="submitAndNext('specify')">
+  {% endif %}
+  {% if role == "researcher" or role == "admin" %}
+  <button class="q-btn submit-specify tab-submit-btn" data-for-tab="specify"
+          onclick="submitAndNext('specify')" style="display:none">
     Mark Complete &amp; Next
   </button>
   {% endif %}
@@ -721,6 +751,11 @@
           </svg>
         </button>
         <div class="tool-sep"></div>
+        <button class="dino-btn" id="auto-box-btn" onclick="autoBox()"
+                title="DINOv3 proposes boxes + AI labels in one shot. Skipped if image already has boxes.">
+          ✨ Auto-box this image
+        </button>
+        <div class="tool-sep"></div>
         <span class="tool-label">Opacity:</span>
         <input type="range" min="0" max="100" value="15" style="width:70px;accent-color:var(--accent)"
                oninput="setBoxOpacity(this.value)">
@@ -739,7 +774,7 @@
           ▶ Classify all unclassified
         </button>
         <div class="tool-sep"></div>
-        <button class="dino-btn-auto" id="turn-off-auto" onclick="toggleAutoSuggest()"
+        <button class="dino-btn" id="turn-off-auto" onclick="toggleAutoSuggest()"
                   title="Turn off the automatic AI suggestions to enhance manual performance">
           Turn off auto-suggest
         </button>
@@ -755,9 +790,9 @@
           </svg>
         </button>
         <div class="tool-sep"></div>
-        <button class="specify-quick" id="finalise-all" onclick="finaliseAll()"
-                title="Finalise All">
-          Finalise all classifications
+        <button class="dino-btn" id="select-all" onclick="selectMany()"
+                title="Select All">
+          Select all boxes
         </button>
         <div class="tool-sep"></div>
         <span class="tool-label">Select a box to specify species →</span>
@@ -768,6 +803,7 @@
 
     <!-- CANVAS -->
     <div class="canvas-scroll" id="canvas-scroll">
+      <div id="canvas-shimmer"></div>
       <div class="image-wrapper" id="image-wrapper">
         <img id="main-image" src="{{ image.image_url }}" alt="{{ image.original_filename }}"
              draggable="false">
@@ -840,6 +876,7 @@ const IS_VIEWER    = USER_ROLE === "viewer";
 let boxes        = [];
 let selectedId   = null;
 let selectedBoxes = [];
+let selectAll    = false
 let autoAI       = true;
 let currentTool  = "select";
 let imgNatW      = 0, imgNatH = 0;
@@ -868,12 +905,24 @@ const CAT_COLORS = {
   null:        "#4a9eff",
 };
 
+// Resolve a box's category, falling back to the AI suggestion when no
+// human label has been applied yet. Returns null if neither is available.
+function categoryFor(b) {
+  if (b.taxonomy_category) return b.taxonomy_category;
+  if (b.ai_suggested_label) {
+    const m = TAXONOMY.find(t => t.name === b.ai_suggested_label);
+    if (m) return m.category;
+  }
+  return null;
+}
+
 // ── INIT ───────────────────────────────────────────────────────────
 document.addEventListener("DOMContentLoaded", async () => {
   const img = document.getElementById("main-image");
   if (img.complete) initAfterLoad();
   else img.addEventListener("load", initAfterLoad);
-  setupTabUI();
+  switchTab(ACTIVE_TAB);
+  history.replaceState({ tab: ACTIVE_TAB }, '', location.href);
   setupCanvasEvents();
   setupKeyboard();
   // Load queue info asynchronously — doesn't block the annotation UI
@@ -886,6 +935,19 @@ function initAfterLoad() {
   imgNatH = img.naturalHeight;
   updateImgDims();
   if (!CAN_BOUND) document.getElementById("image-wrapper").classList.add("readonly");
+
+  // Fade in image, remove canvas shimmer
+  img.style.opacity = "1";
+  const shimmer = document.getElementById("canvas-shimmer");
+  if (shimmer) shimmer.remove();
+
+  // Show skeleton rows in all box lists while API fetch runs
+  const skelHTML = Array.from({length: 4}, () => '<div class="box-skeleton"></div>').join('');
+  ['box-list-left', 'classify-box-list', 'specify-box-list'].forEach(id => {
+    const el = document.getElementById(id);
+    if (el) el.innerHTML = skelHTML;
+  });
+
   loadBoxes();
   buildTaxonomyUI();
   buildCatFilters();
@@ -898,23 +960,47 @@ function updateImgDims() {
 }
 
 // ── TAB UI ─────────────────────────────────────────────────────────
-function setupTabUI() {
-  const tab = ACTIVE_TAB;
-  document.querySelectorAll(".tab-panel-bound").forEach(el =>
-    el.classList.toggle("hidden", tab !== "bound"));
-  document.querySelectorAll(".tab-panel-classify").forEach(el =>
-    el.classList.toggle("hidden", tab !== "classify"));
-  document.querySelectorAll(".tab-panel-specify").forEach(el =>
-    el.classList.toggle("hidden", tab !== "specify"));
+let currentTab = ACTIVE_TAB;
 
-  const boundTools = document.getElementById("bound-tools");
-  const classifyTools = document.getElementById("classify-tools");
-  const specifyTools = document.getElementById("specify-tools");
+function switchTab(tab) {
+  currentTab = tab;
 
-  if (boundTools) boundTools.classList.toggle("hidden", tab !== "bound" || !CAN_BOUND);
-  if (classifyTools) classifyTools.classList.toggle("hidden", tab !== "classify" || !CAN_CLASSIFY);
-  if (specifyTools) specifyTools.classList.toggle("hidden", tab !== "specify" || !CAN_SPECIFY);
+  ['bound','classify','specify'].forEach(t => {
+    document.querySelectorAll('.tab-panel-' + t)
+      .forEach(el => el.classList.toggle('hidden', tab !== t));
+  });
+
+  const boundTools    = document.getElementById('bound-tools');
+  const classifyTools = document.getElementById('classify-tools');
+  const specifyTools  = document.getElementById('specify-tools');
+  if (boundTools)    boundTools.classList.toggle('hidden',    tab !== 'bound'    || !CAN_BOUND);
+  if (classifyTools) classifyTools.classList.toggle('hidden', tab !== 'classify' || !CAN_CLASSIFY);
+  if (specifyTools)  specifyTools.classList.toggle('hidden',  tab !== 'specify'  || !CAN_SPECIFY);
+
+  document.querySelectorAll('.tab').forEach(el => {
+    const href = el.getAttribute('href') || '';
+    el.classList.toggle('active', href.endsWith('/' + tab + '/'));
+  });
+
+  document.querySelectorAll('.tab-submit-btn').forEach(btn => {
+    btn.style.display = btn.dataset.forTab === tab ? '' : 'none';
+  });
 }
+
+document.addEventListener('click', function(e) {
+  const a = e.target.closest('.tab[href]');
+  if (!a) return;
+  e.preventDefault();
+  const href = a.getAttribute('href');
+  const tab = href.replace(/\/$/, '').split('/').pop();
+  const newUrl = location.pathname.replace(/\/[^/]+\/?$/, '/' + tab + '/');
+  switchTab(tab);
+  history.pushState({ tab }, '', newUrl);
+});
+
+window.addEventListener('popstate', function(e) {
+  if (e.state && e.state.tab) switchTab(e.state.tab);
+});
 
 // ── API HELPERS ────────────────────────────────────────────────────
 async function api(path, method="GET", body=null) {
@@ -958,13 +1044,22 @@ function renderBox(b) {
   const ph = (b.height / 100) * imgDispH;
   el.style.cssText = `left:${px}px;top:${py}px;width:${pw}px;height:${ph}px;`;
 
-  const col = CAT_COLORS[b.taxonomy_category] || CAT_COLORS.null;
+  const cat = categoryFor(b);
+  const col = CAT_COLORS[cat] || CAT_COLORS.null;
+  const aiOnly = !b.taxonomy_label && !!b.ai_suggested_label;
   el.style.background = hexAlpha(col, boxOpacity);
   el.style.borderColor = col;
+  el.style.borderStyle = aiOnly ? "dashed" : "solid";
 
   const lbl = document.createElement("div");
   lbl.className = "bbox-label";
-  lbl.textContent = b.taxonomy_label || (b.source === "dino" ? `DINO ${Math.round((b.confidence||0)*100)}%` : "manual");
+  lbl.textContent =
+    b.taxonomy_label
+    || (b.ai_suggested_label
+        ? `${b.ai_suggested_label} ${Math.round((b.ai_suggestion_confidence || 0) * 100)}%`
+        : (b.source === "dino"
+            ? (b.confidence != null ? `DINO ${Math.round(b.confidence * 100)}%` : "tile")
+            : "manual"));
   lbl.style.background = col;
   lbl.style.color = lightness(col) > 0.5 ? "#000" : "#fff";
   el.appendChild(lbl);
@@ -994,7 +1089,10 @@ function renderBox(b) {
 // ── BOX INTERACTION ────────────────────────────────────────────────
 function selectBox(id) {
   selectedId = id;
-  if (event.shiftKey) {selectedBoxes.push(selectedId);
+  if (event.shiftKey || selectAll) {
+    if (selectedBoxes.includes(selectedId)) {
+      selectedBoxes = selectedBoxes.filter(removed => removed !== selectedId);
+    } else {selectedBoxes.push(selectedId);}
   } else {selectedBoxes = [selectedId];}
   renderAllBoxes();
   const b = boxes.find(x => x.id === id);
@@ -1240,6 +1338,41 @@ async function suggestAll() {
   }
 }
 
+// ── AUTO-BOX (DINOv3 proposer + classifier in one shot) ────────────
+async function autoBox() {
+  const btn = document.getElementById("auto-box-btn");
+  if (!btn) return;
+  if (boxes && boxes.length > 0) {
+    toast("Image already has boxes. Auto-box is skipped.");
+    return;
+  }
+  btn.classList.add("loading");
+  const orig = btn.textContent;
+  btn.textContent = "Auto-boxing…";
+  try {
+    const data = await api("auto-box/", "POST");
+    if (data.error) { toast(data.error); return; }
+    if (data.skipped) {
+      toast(data.message || "Skipped: image already has boxes.");
+      return;
+    }
+    const created = data.created || 0;
+    if (created === 0) {
+      toast(data.message || "No foreground regions found.");
+      return;
+    }
+    toast(data.message || `Created ${created} auto-box${created === 1 ? '' : 'es'}. Reloading…`);
+    // Reload so the new boxes are visible. Slightly longer delay so the
+    // user has time to read the "switch to Classify tab" hint.
+    setTimeout(() => location.reload(), 1500);
+  } catch (e) {
+    toast(`Auto-box failed: ${e}`);
+  } finally {
+    btn.classList.remove("loading");
+    btn.textContent = orig;
+  }
+}
+
 // ── TOOL SWITCHING ─────────────────────────────────────────────────
 function setTool(t) {
   if ((t === "draw" || t === "erase") && !CAN_BOUND) {
@@ -1261,6 +1394,15 @@ function setupKeyboard() {
     if (CAN_BOUND && (e.key === "d" || e.key === "D")) setTool("draw");
     if (CAN_BOUND && (e.key === "e" || e.key === "E")) setTool("erase");
     if (CAN_BOUND && (e.key === "Delete" || e.key === "Backspace")) deleteSelected();
+    if ((CAN_CLASSIFY) && (e.key === "1")) applyLabel(1,'Staghorn Coral','coral');
+    if ((CAN_CLASSIFY) && (e.key === "2")) applyLabel(2,'Brain Coral','coral');
+    if ((CAN_CLASSIFY) && (e.key === "3")) applyLabel(3,'Plate Coral','coral');
+    if ((CAN_CLASSIFY) && (e.key === "4")) applyLabel(4,'Soft Coral','coral');
+    if ((CAN_CLASSIFY) && (e.key === "5")) applyLabel(5,'Bleached Coral','coral');
+    if ((CAN_CLASSIFY) && (e.key === "6")) applyLabel(6,'Reef Fish','fish');
+    if ((CAN_CLASSIFY) && (e.key === "7")) applyLabel(20,'Sand','other');
+    if ((CAN_CLASSIFY) && (e.key === "8")) applyLabel(21,'Rock','other');
+    if ((CAN_CLASSIFY) && (e.key === "9")) applyLabel(19,'Rubble','other');
     if (e.key === "Escape") { selectedId = null; renderAllBoxes(); clearPanels(); }
   });
 }
@@ -1281,8 +1423,8 @@ function renderBoxLists() {
 }
 
 function boxListItem(b) {
-  const col = CAT_COLORS[b.taxonomy_category] || CAT_COLORS.null;
-  const name = b.taxonomy_label || b.species_name || (b.source === "dino" ? "DINO box" : "Manual box");
+  const col = CAT_COLORS[categoryFor(b)] || CAT_COLORS.null;
+  const name = b.taxonomy_label || b.species_name || b.ai_suggested_label || (b.source === "dino" ? "DINO box" : "Manual box");
   const fin = b.is_finalized ? " ✓" : "";
   return `<div class="box-item ${b.id === selectedId ? 'active' : ''}"
                onclick="selectBox('${b.id}')"
@@ -1412,7 +1554,7 @@ function refreshTaxHighlight(b) {
 async function applyLabel(taxId, name, category) {
   if (!CAN_CLASSIFY) { toast("You do not have permission to classify boxes"); return; }
   if (!selectedId) { toast("Select a box first"); return; }
-  const data = await api(`boxes/${selectedBoxes[0]}/classify_many/`, "POST", {
+  const data = await api(`classify_many/`, "POST", {
     taxonomy_label_id: taxId, Attached: selectedBoxes });
   for (selected of selectedBoxes) {
     const b = boxes.find(x => x.id === selected);
@@ -1459,19 +1601,27 @@ function showSpecifyPanel(b) {
 async function saveSpecify(finalise) {
   if (!CAN_SPECIFY) { toast("You do not have permission to finalise boxes"); return; }
   if (!selectedId) return;
+
   const species = document.getElementById("spec-species")?.value || "";
   const notes   = document.getElementById("spec-notes")?.value   || "";
-  const data = await api(`boxes/${selectedId}/specify/`, "POST", {
-    species_name: species, researcher_notes: notes, is_finalized: finalise,
-  });
-  const b = boxes.find(x => x.id === selectedId);
-  if (b) { b.species_name = data.species_name; b.researcher_notes = data.researcher_notes; b.is_finalized = data.is_finalized; }
+  // To make even faster, need to do same change as applyLabel, as in, create a specify_many in views.
+  for (selected of selectedBoxes) {
+    const data = await api(`boxes/${selected}/specify/`, "POST", {
+      species_name: species, researcher_notes: notes, is_finalized: finalise,
+    });
+    const b = boxes.find(x => x.id === selected);
+    if (b) { b.species_name = data.species_name; b.researcher_notes = data.researcher_notes; b.is_finalized = data.is_finalized; } 
+  }
   renderAllBoxes(); renderBoxLists();
   toast(finalise ? "Box finalised ✓" : "Draft saved");
 }
 
-async function finaliseAll() {
-  toast('Something must be done here.')
+async function selectMany() {
+  selectAll = true;
+  for (const b of boxes) {
+    selectBox(b.id);
+  }
+  selectAll = false;
 }
 
 
